@@ -851,8 +851,11 @@ async function fetchFootballPlayer(attempts = 0) {
   if (!extract.toLowerCase().includes('football') && !extract.toLowerCase().includes('soccer')) return fetchFootballPlayer(attempts + 1);
   if (extract.length < 80) return fetchFootballPlayer(attempts + 1);
 
+  // Strip disambiguation suffixes like "(footballer, born 1990)" or "(English footballer)"
+  const cleanTitle = (sData.title || title).replace(/\s*\([^)]+\)\s*$/, '').trim();
+
   return {
-    title:       sData.title || title,
+    title:       cleanTitle,
     description: sData.description || '',
     extract,
     thumbnail:   sData.thumbnail ? sData.thumbnail.source : null,
