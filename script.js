@@ -24,6 +24,24 @@ const CAT_FILTER_PREFIXES = [
 
 const DAILY_STORAGE_KEY = 'wikihangman_daily_v1';
 
+const LOSS_TAUNTS = [
+  "The image was RIGHT THERE. 👀",
+  "Don't worry, Wikipedia is completely free. You could've just looked it up. 🤭",
+  "Our algorithm specifically picked this one because we thought you'd get it. We were wrong.",
+  "Even the hangman feels embarrassed for you. Actually no, he doesn't.",
+  "Have you considered easier games? Like… tic-tac-toe?",
+  "We're not angry. Just deeply, deeply disappointed.",
+  "Bold strategy. Didn't pay off.",
+  "The letters were right there. All 26 of them.",
+  "Statistically speaking, random guessing would have done better.",
+  "We've seen better. We've also seen worse. Actually, no we haven't.",
+  "This is awkward for everyone involved.",
+  "In another timeline, you got this one. Not this timeline though.",
+  "You'll get the next one! (We don't actually believe that.)",
+  "The Wikipedia article is linked below. For next time. Just saying.",
+  "A moment of silence for all the letters you didn't guess.",
+];
+
 // Common words excluded from redaction (won't give the answer away)
 const STOP_WORDS = new Set([
   'a','an','the','and','or','but','in','on','at','to','of','for','with',
@@ -532,10 +550,18 @@ function showResult(won, opts = {}) {
     resultBox.classList.add('won');
     resultIcon.textContent  = '🎉';
     resultTitle.textContent = isLocked ? 'Already completed!' : 'You got it!';
+    resultBox.querySelector('.result-taunt')?.remove();
   } else {
     resultBox.classList.add('lost');
-    resultIcon.textContent  = '💀';
+    resultIcon.textContent  = '😂';
+    resultIcon.classList.add('laughing');
     resultTitle.textContent = isLocked ? 'Better luck next time!' : 'Game Over';
+    // Remove any previous taunt then insert a fresh one
+    resultBox.querySelector('.result-taunt')?.remove();
+    const taunt = document.createElement('p');
+    taunt.className = 'result-taunt';
+    taunt.textContent = LOSS_TAUNTS[Math.floor(Math.random() * LOSS_TAUNTS.length)];
+    resultMessage.insertAdjacentElement('afterend', taunt);
   }
 
   resultMessage.textContent = `The answer was: "${title}"`;
@@ -565,7 +591,10 @@ function showDailyLockedResult() {
   showResult(r.won, { locked: true, title: r.title, pageUrl: r.pageUrl });
 }
 
-function hideResult() { resultOverlay.classList.add('hidden'); }
+function hideResult() {
+  resultOverlay.classList.add('hidden');
+  resultIcon.classList.remove('laughing');
+}
 
 // ── Confetti / Fireworks ──────────────────────────────────────
 function launchConfetti() {

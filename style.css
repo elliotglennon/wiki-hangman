@@ -241,6 +241,23 @@ html, body {
   font-size: 0.95rem;
 }
 
+.result-taunt {
+  font-size: 0.88rem;
+  color: var(--red);
+  font-style: italic;
+  margin-top: -6px;
+}
+
+.result-icon.laughing {
+  display: inline-block;
+  animation: laughing-bounce 0.4s ease-in-out infinite alternate;
+}
+
+@keyframes laughing-bounce {
+  0%   { transform: rotate(-12deg) scale(1);    }
+  100% { transform: rotate(12deg)  scale(1.15); }
+}
+
 .wiki-link {
   color: var(--blue);
   text-decoration: none;
