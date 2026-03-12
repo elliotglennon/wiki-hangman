@@ -36,8 +36,10 @@ const STOP_WORDS = new Set([
 ]);
 
 // ── Mode ───────────────────────────────────────────────────────
-let currentMode = 'daily';
-let dailyCache  = { article: null, date: null };
+let currentMode   = 'daily';
+let dailyCache    = { article: null, date: null };
+let sessionWins   = 0;
+let sessionTotal  = 0;
 
 // ── State ──────────────────────────────────────────────────────
 let state = {
@@ -70,6 +72,7 @@ const giveUpBtn      = $('giveUpBtn');
 const darkModeBtn    = $('darkModeBtn');
 const debugResetBtn  = $('debugResetBtn');
 const dailyDateLabel = $('dailyDateLabel');
+const sessionScore   = $('sessionScore');
 const wrongCountEl   = $('wrongCount');
 const wrongLettersEl = $('wrongLetters');
 const wordDisplay    = $('wordDisplay');
@@ -143,8 +146,14 @@ function attachEventListeners() {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
-  // Physical keyboard support
+  // Physical keyboard support + Enter on result popup
   document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !resultOverlay.classList.contains('hidden')) {
+      // Press the most relevant visible action button
+      if (!playAgainBtn.classList.contains('hidden')) playAgainBtn.click();
+      else if (!tryRandomBtn.classList.contains('hidden')) tryRandomBtn.click();
+      return;
+    }
     if (state.gameOver) return;
     const key = e.key.toUpperCase();
     if (/^[A-Z]$/.test(key)) guessLetter(key);
@@ -241,8 +250,19 @@ function switchTab(mode) {
     btn.classList.toggle('active', active);
     btn.setAttribute('aria-selected', active);
   });
+  if (mode === 'random') { sessionWins = 0; sessionTotal = 0; }
   updateDailyLabel();
+  updateSessionScore();
   startNewGame();
+}
+
+function updateSessionScore() {
+  if (currentMode === 'random' && sessionTotal > 0) {
+    sessionScore.textContent = `🎯 ${sessionWins}/${sessionTotal}`;
+    sessionScore.classList.remove('hidden');
+  } else {
+    sessionScore.classList.add('hidden');
+  }
 }
 
 function updateDailyLabel() {
@@ -467,6 +487,7 @@ function checkLoss() {
 function triggerWin() {
   state.gameOver = true;
   state.won      = true;
+  if (currentMode === 'random') { sessionWins++; sessionTotal++; updateSessionScore(); }
   disableKeyboard();
   document.querySelectorAll('.letter-char').forEach(el => {
     const char = el.dataset.char;
@@ -479,6 +500,7 @@ function triggerWin() {
 function triggerLoss() {
   state.gameOver = true;
   state.won      = false;
+  if (currentMode === 'random') { sessionTotal++; updateSessionScore(); }
   disableKeyboard();
   document.querySelectorAll('.letter-char').forEach(el => {
     const char = el.dataset.char;
@@ -487,7 +509,7 @@ function triggerLoss() {
       el.style.color = '#d33';
     }
   });
-  setTimeout(() => showResult(false), 600);
+  setTimeout(() => { launchSadRain(); showResult(false); }, 600);
 }
 
 function disableKeyboard() {
@@ -578,6 +600,27 @@ function launchConfetti() {
   burst(0);
   burst(400);
   burst(800);
+}
+
+function launchSadRain() {
+  const emojis = ['😭','😢','💧','😿','🥺','💦','😩','😖','🙃'];
+  for (let i = 0; i < 35; i++) {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'sad-piece';
+      el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+      el.style.cssText = [
+        `left: ${Math.random() * 100}%`,
+        `--duration: ${2 + Math.random() * 2}s`,
+        `--delay: 0s`,
+        `--drift: ${Math.random() * 60 - 30}px`,
+        `--rot: ${Math.random() * 40 - 20}deg`,
+        `font-size: ${1.2 + Math.random() * 1.4}rem`,
+      ].join(';');
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 4500);
+    }, Math.random() * 1200);
+  }
 }
 
 // ── Redaction Helpers ─────────────────────────────────────────
