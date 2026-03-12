@@ -22,14 +22,16 @@ const CAT_FILTER_PREFIXES = [
   'webarchive', 'good articles', 'featured articles',
 ];
 
+const DAILY_STORAGE_KEY = 'wikihangman_daily_v1';
+
 // ── Mode ───────────────────────────────────────────────────────
 let currentMode = 'daily';
-let dailyCache  = { article: null, date: null }; // avoid re-fetching on tab switch
+let dailyCache  = { article: null, date: null };
 
 // ── State ──────────────────────────────────────────────────────
 let state = {
-  article:      null,   // { title, description, extract, thumbnail, pageUrl }
-  answer:       '',     // uppercase title
+  article:      null,
+  answer:       '',
   guessed:      new Set(),
   wrongCount:   0,
   lifelinesUsed: new Set(),
@@ -50,21 +52,64 @@ const resultTitle    = $('resultTitle');
 const resultMessage  = $('resultMessage');
 const resultLink     = $('resultLink');
 const playAgainBtn   = $('playAgainBtn');
+const tryRandomBtn   = $('tryRandomBtn');
+const dailyLockMsg   = $('dailyLockMsg');
 const newGameBtn     = $('newGameBtn');
 const giveUpBtn      = $('giveUpBtn');
 const darkModeBtn    = $('darkModeBtn');
+const debugResetBtn  = $('debugResetBtn');
 const dailyDateLabel = $('dailyDateLabel');
 const wrongCountEl   = $('wrongCount');
 const wrongLettersEl = $('wrongLetters');
 const wordDisplay    = $('wordDisplay');
 const hintArea       = $('hintArea');
 const keyboard       = $('keyboard');
+const articleThumb   = $('articleThumb');
+
+// ── Daily Lock (localStorage) ─────────────────────────────────
+function getDailyRecord() {
+  try { return JSON.parse(localStorage.getItem(DAILY_STORAGE_KEY)) || {}; }
+  catch { return {}; }
+}
+
+function setDailyRecord(data) {
+  try { localStorage.setItem(DAILY_STORAGE_KEY, JSON.stringify(data)); } catch {}
+}
+
+function isDailyLocked() {
+  const r = getDailyRecord();
+  return r.date === utcDateStr() && r.completed === true;
+}
+
+function lockDaily(won) {
+  setDailyRecord({
+    date: utcDateStr(),
+    completed: true,
+    won,
+    title:   state.article?.title   || '',
+    pageUrl: state.article?.pageUrl || '',
+  });
+}
+
+function resetDailyLock() {
+  localStorage.removeItem(DAILY_STORAGE_KEY);
+}
+
+function utcDateStr() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 // ── Initialisation ─────────────────────────────────────────────
 function init() {
   buildKeyboard();
   attachEventListeners();
   updateDailyLabel();
+
+  // Debug mode: ?debug in URL shows the reset button
+  if (new URLSearchParams(window.location.search).has('debug')) {
+    debugResetBtn.classList.remove('hidden');
+  }
+
   startNewGame();
 }
 
@@ -72,7 +117,10 @@ function attachEventListeners() {
   newGameBtn.addEventListener('click', startNewGame);
   playAgainBtn.addEventListener('click', startNewGame);
   retryBtn.addEventListener('click', startNewGame);
+  tryRandomBtn.addEventListener('click', () => { hideResult(); switchTab('random'); });
   giveUpBtn.addEventListener('click', () => { if (!state.gameOver && state.answer) triggerLoss(); });
+  debugResetBtn.addEventListener('click', () => { resetDailyLock(); startNewGame(); });
+
   darkModeBtn.addEventListener('click', () => {
     const isDark = document.documentElement.dataset.theme === 'dark';
     document.documentElement.dataset.theme = isDark ? '' : 'dark';
@@ -134,6 +182,7 @@ async function startNewGame() {
   clearHints();
   resetKeyboard();
   resetLifelineButtons();
+  hideThumb();
 
   state = {
     article:       null,
@@ -148,6 +197,12 @@ async function startNewGame() {
   updateWrongDisplay();
   wordDisplay.innerHTML = '';
 
+  // Check daily lock before loading
+  if (currentMode === 'daily' && isDailyLocked()) {
+    showDailyLockedResult();
+    return;
+  }
+
   giveUpBtn.disabled = true;
   showLoading();
   try {
@@ -156,6 +211,7 @@ async function startNewGame() {
     state.article = article;
     state.answer  = article.title.toUpperCase();
     giveUpBtn.disabled = false;
+    showThumb(article.thumbnail);
     renderWordDisplay();
     updateHangman();
   } catch (err) {
@@ -180,22 +236,32 @@ function switchTab(mode) {
 
 function updateDailyLabel() {
   if (currentMode === 'daily') {
-    const now = new Date();
-    const label = now.toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' });
+    const label = new Date().toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' });
     dailyDateLabel.textContent = label;
   } else {
     dailyDateLabel.textContent = '';
   }
 }
 
+// ── Article Thumbnail ─────────────────────────────────────────
+function showThumb(src) {
+  if (src) {
+    articleThumb.src = src;
+    articleThumb.classList.remove('hidden');
+  }
+}
+
+function hideThumb() {
+  articleThumb.classList.add('hidden');
+  articleThumb.src = '';
+}
+
 // ── Wikipedia API Calls ───────────────────────────────────────
 
-// Daily puzzle: pick a deterministic article from Wikipedia's "On This Day" pool
 async function fetchDailyArticle() {
   const now     = new Date();
-  const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD UTC
+  const dateStr = now.toISOString().slice(0, 10);
 
-  // Return cached article if still the same UTC day
   if (dailyCache.date === dateStr && dailyCache.article) return dailyCache.article;
 
   const month = String(now.getUTCMonth() + 1).padStart(2, '0');
@@ -206,7 +272,6 @@ async function fetchDailyArticle() {
   if (!resp.ok) throw new Error(`On This Day API returned ${resp.status}`);
   const data = await resp.json();
 
-  // Collect all linked pages from events, births, deaths
   const pool = [];
   for (const category of ['events', 'births', 'deaths']) {
     for (const entry of (data[category] || [])) {
@@ -218,30 +283,28 @@ async function fetchDailyArticle() {
         if (title.length < 3 || words.length > 5) continue;
         pool.push({
           title,
-          description:  page.description   || '',
-          extract:      page.extract        || '',
-          thumbnail:    page.thumbnail      ? page.thumbnail.source : null,
-          pageUrl:      page.content_urls   ? page.content_urls.desktop.page
-                                            : `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`,
+          description:  page.description || '',
+          extract:      page.extract     || '',
+          thumbnail:    page.thumbnail   ? page.thumbnail.source : null,
+          pageUrl:      page.content_urls ? page.content_urls.desktop.page
+                                          : `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`,
         });
       }
     }
   }
 
-  if (pool.length === 0) throw new Error('No suitable articles found for today\'s date.');
+  if (pool.length === 0) throw new Error("No suitable articles found for today's date.");
 
-  // Deterministic pick: seed from full UTC date integer (YYYYMMDD)
-  const seed  = parseInt(dateStr.replace(/-/g, ''), 10);
+  const seed    = parseInt(dateStr.replace(/-/g, ''), 10);
   const article = pool[seed % pool.length];
-
-  dailyCache = { article, date: dateStr };
+  dailyCache    = { article, date: dateStr };
   return article;
 }
 
 async function fetchValidArticle(attempts = 0) {
   if (attempts > 15) throw new Error('Could not find a suitable article after many attempts. Please retry.');
 
-  const url = 'https://en.wikipedia.org/api/rest_v1/page/random/summary';
+  const url  = 'https://en.wikipedia.org/api/rest_v1/page/random/summary';
   const resp = await fetchWithTimeout(url, {}, 8000);
   if (!resp.ok) throw new Error(`Wikipedia API returned ${resp.status}`);
   const data = await resp.json();
@@ -250,54 +313,32 @@ async function fetchValidArticle(attempts = 0) {
   const description = (data.description || '').toLowerCase();
   const words       = title.trim().split(/\s+/);
 
-  // Filter rules
-  if (title.includes(':'))                       return fetchValidArticle(attempts + 1);
-  if (description.includes('disambiguation'))    return fetchValidArticle(attempts + 1);
-  if (title.length < 3)                          return fetchValidArticle(attempts + 1);
-  if (words.length > 5)                          return fetchValidArticle(attempts + 1);
+  if (title.includes(':'))                    return fetchValidArticle(attempts + 1);
+  if (description.includes('disambiguation')) return fetchValidArticle(attempts + 1);
+  if (title.length < 3)                       return fetchValidArticle(attempts + 1);
+  if (words.length > 5)                       return fetchValidArticle(attempts + 1);
 
   return {
     title,
     description:  data.description || '',
-    extract:      data.extract      || '',
-    thumbnail:    data.thumbnail    ? data.thumbnail.source : null,
+    extract:      data.extract     || '',
+    thumbnail:    data.thumbnail   ? data.thumbnail.source : null,
     pageUrl:      data.content_urls ? data.content_urls.desktop.page : `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`,
   };
 }
 
 async function fetchCategories(title) {
-  const url = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=categories&cllimit=40&format=json&origin=*`;
+  const url  = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=categories&cllimit=40&format=json&origin=*`;
   const resp = await fetchWithTimeout(url, {}, 8000);
   if (!resp.ok) throw new Error('Categories API error');
-  const data   = await resp.json();
-  const pages  = data.query?.pages || {};
-  const page   = Object.values(pages)[0];
-  const cats   = (page?.categories || []).map(c => c.title.replace(/^Category:/, ''));
-
-  const filtered = cats.filter(cat => {
+  const data    = await resp.json();
+  const pages   = data.query?.pages || {};
+  const page    = Object.values(pages)[0];
+  const cats    = (page?.categories || []).map(c => c.title.replace(/^Category:/, ''));
+  return cats.filter(cat => {
     const lower = cat.toLowerCase();
-    return !CAT_FILTER_PREFIXES.some(prefix => lower.startsWith(prefix));
-  });
-
-  return filtered.slice(0, 5);
-}
-
-async function fetchSections(title) {
-  const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(title)}&prop=sections&format=json&origin=*`;
-  const resp = await fetchWithTimeout(url, {}, 8000);
-  if (!resp.ok) throw new Error('Sections API error');
-  const data     = await resp.json();
-  const sections = data.parse?.sections || [];
-  return sections.slice(0, 8).map(s => s.line);
-}
-
-async function fetchRelated(title) {
-  const url = `https://en.wikipedia.org/api/rest_v1/page/related/${encodeURIComponent(title)}`;
-  const resp = await fetchWithTimeout(url, {}, 8000);
-  if (!resp.ok) throw new Error('Related API error');
-  const data  = await resp.json();
-  const pages = data.pages || [];
-  return pages.slice(0, 3).map(p => p.title);
+    return !CAT_FILTER_PREFIXES.some(p => lower.startsWith(p));
+  }).slice(0, 5);
 }
 
 function fetchWithTimeout(url, options = {}, timeout = 8000) {
@@ -310,23 +351,18 @@ function fetchWithTimeout(url, options = {}, timeout = 8000) {
 // ── Word Display ──────────────────────────────────────────────
 function renderWordDisplay() {
   wordDisplay.innerHTML = '';
-  const answer = state.answer;
-
-  // Split into words by space, but preserve all chars in order
-  const wordsRaw = answer.split(' ');
+  const wordsRaw = state.answer.split(' ');
 
   wordsRaw.forEach((word, wi) => {
     const groupEl = document.createElement('div');
     groupEl.className = 'word-group';
 
     for (const char of word) {
-      const tile = document.createElement('div');
+      const tile   = document.createElement('div');
       tile.className = 'letter-tile';
-
       const charEl = document.createElement('span');
-      charEl.className = 'letter-char';
+      charEl.className    = 'letter-char';
       charEl.dataset.char = char;
-
       const lineEl = document.createElement('span');
       lineEl.className = 'letter-line';
 
@@ -345,7 +381,6 @@ function renderWordDisplay() {
 
     wordDisplay.appendChild(groupEl);
 
-    // Space between words (not after last word)
     if (wi < wordsRaw.length - 1) {
       const spacer = document.createElement('div');
       spacer.style.width = '10px';
@@ -355,8 +390,7 @@ function renderWordDisplay() {
 }
 
 function refreshWordDisplay() {
-  const charEls = wordDisplay.querySelectorAll('.letter-char');
-  charEls.forEach(el => {
+  wordDisplay.querySelectorAll('.letter-char').forEach(el => {
     const char = el.dataset.char;
     if (!char || isAutoReveal(char)) return;
     if (state.guessed.has(char)) {
@@ -368,12 +402,11 @@ function refreshWordDisplay() {
 
 // ── Guessing ──────────────────────────────────────────────────
 function guessLetter(letter) {
-  if (state.gameOver)              return;
-  if (state.guessed.has(letter))   return;
-  if (!state.answer)               return;
+  if (state.gameOver)            return;
+  if (state.guessed.has(letter)) return;
+  if (!state.answer)             return;
 
   state.guessed.add(letter);
-
   const keyBtn = $(`key-${letter}`);
 
   if (state.answer.includes(letter)) {
@@ -394,13 +427,8 @@ function updateHangman() {
   BODY_PARTS.forEach((id, i) => {
     const el = $(id);
     if (!el) return;
-    if (i < state.wrongCount) {
-      el.classList.remove('hidden');
-      el.classList.add('visible');
-    } else {
-      el.classList.remove('visible');
-      el.classList.add('hidden');
-    }
+    el.classList.toggle('hidden',  i >= state.wrongCount);
+    el.classList.toggle('visible', i <  state.wrongCount);
   });
 }
 
@@ -413,8 +441,7 @@ function updateWrongDisplay() {
 // ── Win / Loss Checks ─────────────────────────────────────────
 function checkWin() {
   const answerChars = [...state.answer].filter(c => !isAutoReveal(c));
-  const allGuessed  = answerChars.every(c => state.guessed.has(c));
-  if (allGuessed) triggerWin();
+  if (answerChars.every(c => state.guessed.has(c))) triggerWin();
 }
 
 function checkLoss() {
@@ -425,20 +452,18 @@ function triggerWin() {
   state.gameOver = true;
   state.won      = true;
   disableKeyboard();
-  // Reveal all letters
   document.querySelectorAll('.letter-char').forEach(el => {
     const char = el.dataset.char;
     if (char && !isAutoReveal(char)) el.textContent = char;
     el.closest('.letter-tile')?.classList.add('correct');
   });
-  setTimeout(() => showResult(true), 500);
+  setTimeout(() => { launchConfetti(); showResult(true); }, 500);
 }
 
 function triggerLoss() {
   state.gameOver = true;
   state.won      = false;
   disableKeyboard();
-  // Reveal answer
   document.querySelectorAll('.letter-char').forEach(el => {
     const char = el.dataset.char;
     if (char && !isAutoReveal(char) && !state.guessed.has(char)) {
@@ -455,49 +480,115 @@ function disableKeyboard() {
 }
 
 // ── Result Overlay ────────────────────────────────────────────
-function showResult(won) {
+function showResult(won, opts = {}) {
+  const isDaily  = currentMode === 'daily';
+  const isLocked = opts.locked || false;
+  const title    = opts.title   || state.article?.title   || '';
+  const pageUrl  = opts.pageUrl || state.article?.pageUrl || '#';
+
+  // Lock the daily puzzle after first completion
+  if (isDaily && !isLocked) lockDaily(won);
+
   resultBox.classList.remove('won', 'lost');
   if (won) {
     resultBox.classList.add('won');
-    resultIcon.textContent    = '🎉';
-    resultTitle.textContent   = 'You got it!';
-    resultMessage.textContent = `The answer was: "${state.article.title}"`;
+    resultIcon.textContent  = '🎉';
+    resultTitle.textContent = isLocked ? 'Already completed!' : 'You got it!';
   } else {
     resultBox.classList.add('lost');
-    resultIcon.textContent    = '💀';
-    resultTitle.textContent   = 'Game Over';
-    resultMessage.textContent = `The answer was: "${state.article.title}"`;
+    resultIcon.textContent  = '💀';
+    resultTitle.textContent = isLocked ? 'Better luck next time!' : 'Game Over';
   }
-  resultLink.href        = state.article.pageUrl;
-  resultLink.textContent = `Read "${state.article.title}" on Wikipedia →`;
+
+  resultMessage.textContent = `The answer was: "${title}"`;
+  resultLink.href        = pageUrl;
+  resultLink.textContent = `Read "${title}" on Wikipedia →`;
+
+  // Play Again: hide if daily is locked
+  playAgainBtn.classList.toggle('hidden', isDaily && (isLocked || isDailyLocked()));
+
+  // Try Random: show for daily results
+  if (isDaily) {
+    tryRandomBtn.classList.remove('hidden');
+    dailyLockMsg.textContent = isLocked
+      ? "You've already played today's daily. Come back tomorrow!"
+      : "That's today's daily done — come back tomorrow for a new puzzle!";
+    dailyLockMsg.classList.remove('hidden');
+  } else {
+    tryRandomBtn.classList.add('hidden');
+    dailyLockMsg.classList.add('hidden');
+  }
+
   resultOverlay.classList.remove('hidden');
+}
+
+function showDailyLockedResult() {
+  const r = getDailyRecord();
+  showResult(r.won, { locked: true, title: r.title, pageUrl: r.pageUrl });
 }
 
 function hideResult() { resultOverlay.classList.add('hidden'); }
 
+// ── Confetti / Fireworks ──────────────────────────────────────
+function launchConfetti() {
+  const colors = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#9b59b6','#1abc9c','#ff69b4'];
+
+  function burst(delay) {
+    setTimeout(() => {
+      for (let i = 0; i < 60; i++) {
+        const el    = document.createElement('div');
+        el.className = 'confetti-piece';
+        const angle = Math.random() * 360;
+        const dist  = 120 + Math.random() * 220;
+        const tx    = Math.cos(angle * Math.PI / 180) * dist;
+        const ty    = Math.sin(angle * Math.PI / 180) * dist - 80;
+        el.style.cssText = [
+          `--tx: ${tx}px`,
+          `--ty: ${ty}px`,
+          `--rot: ${Math.random() * 720 - 360}deg`,
+          `background: ${colors[Math.floor(Math.random() * colors.length)]}`,
+          `width: ${Math.random() > 0.5 ? Math.random() * 8 + 4 : Math.random() * 3 + 2}px`,
+          `height: ${Math.random() > 0.5 ? Math.random() * 8 + 4 : Math.random() * 16 + 6}px`,
+          `border-radius: ${Math.random() > 0.4 ? '50%' : '2px'}`,
+          `left: ${30 + Math.random() * 40}%`,
+          `top: ${30 + Math.random() * 30}%`,
+        ].join(';');
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 2200);
+      }
+    }, delay);
+  }
+
+  burst(0);
+  burst(400);
+  burst(800);
+}
+
 // ── Lifelines ─────────────────────────────────────────────────
 async function activateLifeline(name) {
   state.lifelinesUsed.add(name);
-
   const btn = document.querySelector(`[data-lifeline="${name}"]`);
   if (btn) { btn.classList.add('used'); btn.disabled = true; }
 
   switch (name) {
-    case 'description':  showDescriptionHint();          break;
-    case 'categories':   await showCategoriesHint();     break;
-    case 'contents':     await showContentsHint();       break;
-    case 'related':      await showRelatedHint();        break;
-    case 'image':        showImageHint();                break;
-    case 'firstsentence': showFirstSentenceHint();       break;
+    case 'categories':   await showCategoriesHint();  break;
+    case 'freeletter':   showFreeLetterHint();         break;
+    case 'firstsentence': showFirstSentenceHint();     break;
   }
 }
 
-function showDescriptionHint() {
-  if (!state.article.description) {
-    addHintCard('Description', '<em>No description available for this article.</em>');
+function showFreeLetterHint() {
+  const answerLetters = [...new Set([...state.answer].filter(c => !isAutoReveal(c)))];
+  const unguessed     = answerLetters.filter(c => !state.guessed.has(c));
+
+  if (unguessed.length === 0) {
+    addHintCard('Free Letter', '<em>All letters are already revealed!</em>');
     return;
   }
-  addHintCard('Description', escapeHtml(state.article.description));
+
+  const letter = unguessed[Math.floor(Math.random() * unguessed.length)];
+  guessLetter(letter);
+  addHintCard('Free Letter', `The letter <strong>${escapeHtml(letter)}</strong> was revealed for you!`);
 }
 
 async function showCategoriesHint() {
@@ -506,79 +597,24 @@ async function showCategoriesHint() {
     const cats = await fetchCategories(state.article.title);
     const card = document.querySelector('.hint-categories');
     if (!card) return;
-    if (cats.length === 0) {
-      card.querySelector('.hint-body').innerHTML = '<em>No categories found.</em>';
-    } else {
-      const items = cats.map(c => `<li>${escapeHtml(c)}</li>`).join('');
-      card.querySelector('.hint-body').innerHTML = `<ul>${items}</ul>`;
-    }
+    card.querySelector('.hint-body').innerHTML = cats.length === 0
+      ? '<em>No categories found.</em>'
+      : `<ul>${cats.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>`;
   } catch {
     const card = document.querySelector('.hint-categories');
     if (card) card.querySelector('.hint-body').innerHTML = '<em>Could not load categories.</em>';
   }
 }
 
-async function showContentsHint() {
-  addHintCard('Contents', '<em>Loading sections…</em>', 'hint-contents');
-  try {
-    const sections = await fetchSections(state.article.title);
-    const card = document.querySelector('.hint-contents');
-    if (!card) return;
-    if (sections.length === 0) {
-      card.querySelector('.hint-body').innerHTML = '<em>No sections found.</em>';
-    } else {
-      const items = sections.map(s => `<li>${escapeHtml(s)}</li>`).join('');
-      card.querySelector('.hint-body').innerHTML = `<ul>${items}</ul>`;
-    }
-  } catch {
-    const card = document.querySelector('.hint-contents');
-    if (card) card.querySelector('.hint-body').innerHTML = '<em>Could not load sections.</em>';
-  }
-}
-
-async function showRelatedHint() {
-  addHintCard('Related Articles', '<em>Loading related articles…</em>', 'hint-related');
-  try {
-    const related = await fetchRelated(state.article.title);
-    const card = document.querySelector('.hint-related');
-    if (!card) return;
-    if (related.length === 0) {
-      card.querySelector('.hint-body').innerHTML = '<em>No related articles found.</em>';
-    } else {
-      const items = related.map(t => `<li>${escapeHtml(t)}</li>`).join('');
-      card.querySelector('.hint-body').innerHTML = `<ul>${items}</ul>`;
-    }
-  } catch {
-    const card = document.querySelector('.hint-related');
-    if (card) card.querySelector('.hint-body').innerHTML = '<em>Could not load related articles.</em>';
-  }
-}
-
-function showImageHint() {
-  if (!state.article.thumbnail) {
-    addHintCard('Image', '<em>No image available for this article.</em>');
-    return;
-  }
-  const img = `<img src="${escapeHtml(state.article.thumbnail)}" alt="Article thumbnail" loading="lazy" />`;
-  addHintCard('Image', img);
-}
-
 function showFirstSentenceHint() {
   const extract = state.article.extract || '';
-  if (!extract) {
-    addHintCard('First Sentence', '<em>No extract available.</em>');
-    return;
-  }
+  if (!extract) { addHintCard('First Sentence', '<em>No extract available.</em>'); return; }
 
-  // Extract first sentence (up to first period followed by space or end)
-  const firstSentenceMatch = extract.match(/^.+?[.!?](?:\s|$)/);
-  let sentence = firstSentenceMatch ? firstSentenceMatch[0].trim() : extract.slice(0, 200).trim();
+  const match    = extract.match(/^.+?[.!?](?:\s|$)/);
+  let sentence   = match ? match[0].trim() : extract.slice(0, 200).trim();
 
-  // Redact title words (case insensitive)
-  const titleWords = state.article.title.split(/\s+/).filter(w => w.length > 0);
-  titleWords.forEach(word => {
-    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(escaped, 'gi');
+  state.article.title.split(/\s+/).filter(w => w.length > 0).forEach(word => {
+    const re = new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
     sentence = sentence.replace(re, '___');
   });
 
@@ -588,10 +624,7 @@ function showFirstSentenceHint() {
 function addHintCard(title, bodyHtml, extraClass = '') {
   const card = document.createElement('div');
   card.className = `hint-card${extraClass ? ' ' + extraClass : ''}`;
-  card.innerHTML = `
-    <div class="hint-title">${escapeHtml(title)}</div>
-    <div class="hint-body">${bodyHtml}</div>
-  `;
+  card.innerHTML = `<div class="hint-title">${escapeHtml(title)}</div><div class="hint-body">${bodyHtml}</div>`;
   hintArea.appendChild(card);
   card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -608,11 +641,8 @@ function resetLifelineButtons() {
 // ── Loading / Error ───────────────────────────────────────────
 function showLoading() { loadingOverlay.classList.remove('hidden'); }
 function hideLoading() { loadingOverlay.classList.add('hidden'); }
-function showError(msg) {
-  errorMsg.textContent = msg;
-  errorBanner.classList.remove('hidden');
-}
-function hideError() { errorBanner.classList.add('hidden'); }
+function showError(msg) { errorMsg.textContent = msg; errorBanner.classList.remove('hidden'); }
+function hideError()    { errorBanner.classList.add('hidden'); }
 
 // ── Utilities ─────────────────────────────────────────────────
 function escapeHtml(str) {
