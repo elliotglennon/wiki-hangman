@@ -853,12 +853,22 @@ async function fetchPlayerClubs(title) {
   const pages = data.query?.pages || {};
   const page  = Object.values(pages)[0];
   const cats  = (page?.categories || []).map(c => c.title.replace(/^Category:/, ''));
+
+  // Keywords that indicate competitions/tournaments rather than clubs
+  const NOT_CLUBS = [
+    'national', 'world cup', 'olympic', 'premier league', 'championship',
+    'league cup', 'fa cup', 'europa league', 'champions league', 'conference league',
+    'football league', 'serie a', 'la liga', 'bundesliga', 'ligue 1',
+    'international', 'under-', 'euro 20', 'euro 19', 'euros', 'community shield',
+    'carabao cup', 'league one', 'league two', 'scottish', 'welsh', 'irish',
+  ];
   const meaningful = getMeaningfulTitleWords();
 
   return cats
     .filter(cat => {
       const lower = cat.toLowerCase();
       if (!lower.endsWith(' players')) return false;
+      if (NOT_CLUBS.some(kw => lower.includes(kw))) return false;
       if (meaningful.some(w => lower.includes(w.toLowerCase()))) return false;
       return true;
     })
