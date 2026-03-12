@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wiki Hangman</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="header-logo">
+        <svg class="wiki-logo" viewBox="0 0 50 50" aria-hidden="true">
+          <circle cx="25" cy="25" r="24" fill="none" stroke="#a2a9b1" stroke-width="1.5"/>
+          <text x="25" y="32" text-anchor="middle" font-size="22" font-family="Linux Libertine,Georgia,serif" fill="#202122">W</text>
+        </svg>
+        <h1 class="site-title">Wiki Hangman</h1>
+      </div>
+      <button id="newGameBtn" class="btn-primary">New Game</button>
+    </div>
+  </header>
+
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay" class="loading-overlay hidden">
+    <div class="spinner"></div>
+    <p>Fetching a Wikipedia article…</p>
+  </div>
+
+  <!-- Error Banner -->
+  <div id="errorBanner" class="error-banner hidden">
+    <span id="errorMsg">Failed to load article.</span>
+    <button id="retryBtn" class="btn-retry">Retry</button>
+  </div>
+
+  <!-- Game Result Overlay -->
+  <div id="resultOverlay" class="result-overlay hidden">
+    <div class="result-box">
+      <div id="resultIcon" class="result-icon"></div>
+      <h2 id="resultTitle"></h2>
+      <p id="resultMessage"></p>
+      <a id="resultLink" class="wiki-link" target="_blank" rel="noopener">Read on Wikipedia →</a>
+      <button id="playAgainBtn" class="btn-primary">Play Again</button>
+    </div>
+  </div>
+
+  <!-- Main Game Area -->
+  <main class="game-main" id="gameMain">
+
+    <!-- Left Panel: Hangman -->
+    <section class="panel panel-left" aria-label="Hangman">
+      <div class="hangman-container">
+        <svg id="hangmanSvg" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" aria-label="Hangman figure">
+          <!-- Gallows (always shown) -->
+          <line x1="20" y1="230" x2="180" y2="230" class="gallows" />
+          <line x1="60" y1="230" x2="60" y2="20"  class="gallows" />
+          <line x1="60" y1="20"  x2="130" y2="20"  class="gallows" />
+          <line x1="130" y1="20" x2="130" y2="45"  class="gallows" />
+          <!-- Body parts (hidden until wrong guesses) -->
+          <circle id="bp-head"      cx="130" cy="62" r="17"         class="body-part hidden" />
+          <line   id="bp-body"      x1="130" y1="79" x2="130" y2="155" class="body-part hidden" />
+          <line   id="bp-left-arm"  x1="130" y1="100" x2="100" y2="135" class="body-part hidden" />
+          <line   id="bp-right-arm" x1="130" y1="100" x2="160" y2="135" class="body-part hidden" />
+          <line   id="bp-left-leg"  x1="130" y1="155" x2="100" y2="195" class="body-part hidden" />
+          <line   id="bp-right-leg" x1="130" y1="155" x2="160" y2="195" class="body-part hidden" />
+        </svg>
+      </div>
+      <div class="wrong-counter">
+        Wrong: <span id="wrongCount">0</span> / 6
+      </div>
+      <div class="wrong-letters-display">
+        <span id="wrongLetters"></span>
+      </div>
+    </section>
+
+    <!-- Center Panel: Word + Hints -->
+    <section class="panel panel-center" aria-label="Game area">
+      <div id="wordDisplay" class="word-display" aria-live="polite" aria-label="Word to guess"></div>
+      <div id="hintArea" class="hint-area"></div>
+    </section>
+
+    <!-- Right Panel: Lifelines -->
+    <section class="panel panel-right" aria-label="Lifelines">
+      <h2 class="lifelines-heading">Lifelines</h2>
+      <div class="lifelines-grid">
+        <button class="lifeline-btn" id="ll-description" data-lifeline="description" title="Short description of the article">
+          <span class="ll-icon">📋</span>
+          <span class="ll-label">Description</span>
+        </button>
+        <button class="lifeline-btn" id="ll-categories" data-lifeline="categories" title="Show article categories">
+          <span class="ll-icon">🏷️</span>
+          <span class="ll-label">Categories</span>
+        </button>
+        <button class="lifeline-btn" id="ll-contents" data-lifeline="contents" title="Show table of contents">
+          <span class="ll-icon">📚</span>
+          <span class="ll-label">Contents</span>
+        </button>
+        <button class="lifeline-btn" id="ll-related" data-lifeline="related" title="Show related articles">
+          <span class="ll-icon">🔗</span>
+          <span class="ll-label">Related</span>
+        </button>
+        <button class="lifeline-btn" id="ll-image" data-lifeline="image" title="Reveal article thumbnail">
+          <span class="ll-icon">🖼️</span>
+          <span class="ll-label">Image</span>
+        </button>
+        <button class="lifeline-btn" id="ll-firstsentence" data-lifeline="firstsentence" title="Show first sentence (title redacted)">
+          <span class="ll-icon">📖</span>
+          <span class="ll-label">First Sentence</span>
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Keyboard -->
+  <div class="keyboard-section" id="keyboardSection">
+    <div class="keyboard" id="keyboard" role="group" aria-label="Letter keyboard"></div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
