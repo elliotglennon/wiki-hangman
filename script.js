@@ -54,6 +54,11 @@ const MODE_LIFELINES = {
     { id: 'position',    icon: '⚽', label: 'Position',    title: "Reveal this player's playing position" },
     { id: 'nationality', icon: '🌍', label: 'Nationality', title: "Reveal this player's nationality" },
   ],
+  capitals: [
+    { id: 'continent', icon: '🌍', label: 'Continent', title: 'Show which continent this capital is on' },
+    { id: 'region',    icon: '🗺️', label: 'Region',    title: 'Show the geographic region' },
+    { id: 'country',   icon: '🏳️', label: 'Country',   title: 'Show which country this is the capital of' },
+  ],
 };
 
 // Common words excluded from redaction (won't give the answer away)
@@ -199,7 +204,9 @@ function buildLifelineButtons() {
   const grid = document.getElementById('lifelinesGrid');
   if (!grid) return;
   grid.innerHTML = '';
-  const set = currentMode === 'football' ? MODE_LIFELINES.football : MODE_LIFELINES.wiki;
+  const set = currentMode === 'football' ? MODE_LIFELINES.football
+            : currentMode === 'capitals'  ? MODE_LIFELINES.capitals
+            :                               MODE_LIFELINES.wiki;
   set.forEach(({ id, icon, label, title }) => {
     const btn = document.createElement('button');
     btn.className = 'lifeline-btn';
@@ -270,10 +277,15 @@ async function startNewGame() {
   }
 
   giveUpBtn.disabled = true;
-  showLoading(currentMode === 'football' ? 'Finding a Premier League player…' : 'Fetching a Wikipedia article…');
+  showLoading(
+    currentMode === 'football' ? 'Finding a Premier League player…' :
+    currentMode === 'capitals' ? 'Loading a capital city…' :
+    'Fetching a Wikipedia article…'
+  );
   try {
     const article = currentMode === 'daily'    ? await fetchDailyArticle()
                   : currentMode === 'football' ? await fetchFootballPlayer()
+                  : currentMode === 'capitals' ? await fetchCapital()
                   :                              await fetchValidArticle();
     hideLoading();
     state.article = article;
@@ -298,7 +310,7 @@ function switchTab(mode) {
     btn.classList.toggle('active', active);
     btn.setAttribute('aria-selected', active);
   });
-  if (mode === 'random' || mode === 'football') { sessionWins = 0; sessionTotal = 0; }
+  if (mode === 'random' || mode === 'football' || mode === 'capitals') { sessionWins = 0; sessionTotal = 0; }
   buildLifelineButtons();
   updateDailyLabel();
   updateSessionScore();
@@ -306,7 +318,7 @@ function switchTab(mode) {
 }
 
 function updateSessionScore() {
-  if ((currentMode === 'random' || currentMode === 'football') && sessionTotal > 0) {
+  if ((currentMode === 'random' || currentMode === 'football' || currentMode === 'capitals') && sessionTotal > 0) {
     sessionScore.textContent = `🎯 ${sessionWins}/${sessionTotal}`;
     sessionScore.classList.remove('hidden');
   } else {
@@ -536,7 +548,7 @@ function checkLoss() {
 function triggerWin() {
   state.gameOver = true;
   state.won      = true;
-  if (currentMode === 'random' || currentMode === 'football') { sessionWins++; sessionTotal++; updateSessionScore(); }
+  if (currentMode === 'random' || currentMode === 'football' || currentMode === 'capitals') { sessionWins++; sessionTotal++; updateSessionScore(); }
   disableKeyboard();
   document.querySelectorAll('.letter-char').forEach(el => {
     const char = el.dataset.char;
@@ -549,7 +561,7 @@ function triggerWin() {
 function triggerLoss() {
   state.gameOver = true;
   state.won      = false;
-  if (currentMode === 'random' || currentMode === 'football') { sessionTotal++; updateSessionScore(); }
+  if (currentMode === 'random' || currentMode === 'football' || currentMode === 'capitals') { sessionTotal++; updateSessionScore(); }
   disableKeyboard();
   document.querySelectorAll('.letter-char').forEach(el => {
     const char = el.dataset.char;
@@ -719,6 +731,9 @@ async function activateLifeline(name) {
     case 'clubs':         await showClubsHint();         break;
     case 'position':      showPositionHint();            break;
     case 'nationality':   showNationalityHint();         break;
+    case 'continent':     showContinentHint();           break;
+    case 'region':        showRegionHint();              break;
+    case 'country':       showCountryHint();             break;
   }
 }
 
@@ -937,6 +952,237 @@ function showNationalityHint() {
   }
 
   addHintCard('Nationality', '<em>Nationality not found in article.</em>');
+}
+
+// ── Capitals Mode ─────────────────────────────────────────────
+
+const WORLD_CAPITALS = [
+  // Europe
+  { city: 'Amsterdam',          wikiTitle: 'Amsterdam',              country: 'Netherlands',             continent: 'Europe',   region: 'Western Europe' },
+  { city: 'Andorra la Vella',   wikiTitle: 'Andorra la Vella',       country: 'Andorra',                 continent: 'Europe',   region: 'Southern Europe' },
+  { city: 'Athens',             wikiTitle: 'Athens',                 country: 'Greece',                  continent: 'Europe',   region: 'Southern Europe' },
+  { city: 'Belgrade',           wikiTitle: 'Belgrade',               country: 'Serbia',                  continent: 'Europe',   region: 'Southeastern Europe' },
+  { city: 'Berlin',             wikiTitle: 'Berlin',                 country: 'Germany',                 continent: 'Europe',   region: 'Western Europe' },
+  { city: 'Bern',               wikiTitle: 'Bern',                   country: 'Switzerland',             continent: 'Europe',   region: 'Western Europe' },
+  { city: 'Bratislava',         wikiTitle: 'Bratislava',             country: 'Slovakia',                continent: 'Europe',   region: 'Central Europe' },
+  { city: 'Brussels',           wikiTitle: 'Brussels',               country: 'Belgium',                 continent: 'Europe',   region: 'Western Europe' },
+  { city: 'Bucharest',          wikiTitle: 'Bucharest',              country: 'Romania',                 continent: 'Europe',   region: 'Eastern Europe' },
+  { city: 'Budapest',           wikiTitle: 'Budapest',               country: 'Hungary',                 continent: 'Europe',   region: 'Central Europe' },
+  { city: 'Chisinau',           wikiTitle: 'Chișinău',               country: 'Moldova',                 continent: 'Europe',   region: 'Eastern Europe' },
+  { city: 'Copenhagen',         wikiTitle: 'Copenhagen',             country: 'Denmark',                 continent: 'Europe',   region: 'Northern Europe' },
+  { city: 'Dublin',             wikiTitle: 'Dublin',                 country: 'Ireland',                 continent: 'Europe',   region: 'Northern Europe' },
+  { city: 'Helsinki',           wikiTitle: 'Helsinki',               country: 'Finland',                 continent: 'Europe',   region: 'Northern Europe' },
+  { city: 'Kyiv',               wikiTitle: 'Kyiv',                   country: 'Ukraine',                 continent: 'Europe',   region: 'Eastern Europe' },
+  { city: 'Lisbon',             wikiTitle: 'Lisbon',                 country: 'Portugal',                continent: 'Europe',   region: 'Southern Europe' },
+  { city: 'Ljubljana',          wikiTitle: 'Ljubljana',              country: 'Slovenia',                continent: 'Europe',   region: 'Central Europe' },
+  { city: 'London',             wikiTitle: 'London',                 country: 'United Kingdom',          continent: 'Europe',   region: 'Northern Europe' },
+  { city: 'Luxembourg City',    wikiTitle: 'Luxembourg City',        country: 'Luxembourg',              continent: 'Europe',   region: 'Western Europe' },
+  { city: 'Madrid',             wikiTitle: 'Madrid',                 country: 'Spain',                   continent: 'Europe',   region: 'Southern Europe' },
+  { city: 'Minsk',              wikiTitle: 'Minsk',                  country: 'Belarus',                 continent: 'Europe',   region: 'Eastern Europe' },
+  { city: 'Monaco',             wikiTitle: 'Monaco',                 country: 'Monaco',                  continent: 'Europe',   region: 'Southern Europe' },
+  { city: 'Moscow',             wikiTitle: 'Moscow',                 country: 'Russia',                  continent: 'Europe',   region: 'Eastern Europe' },
+  { city: 'Nicosia',            wikiTitle: 'Nicosia',                country: 'Cyprus',                  continent: 'Europe',   region: 'Southern Europe' },
+  { city: 'Oslo',               wikiTitle: 'Oslo',                   country: 'Norway',                  continent: 'Europe',   region: 'Northern Europe' },
+  { city: 'Paris',              wikiTitle: 'Paris',                  country: 'France',                  continent: 'Europe',   region: 'Western Europe' },
+  { city: 'Podgorica',          wikiTitle: 'Podgorica',              country: 'Montenegro',              continent: 'Europe',   region: 'Southeastern Europe' },
+  { city: 'Prague',             wikiTitle: 'Prague',                 country: 'Czech Republic',          continent: 'Europe',   region: 'Central Europe' },
+  { city: 'Pristina',           wikiTitle: 'Pristina',               country: 'Kosovo',                  continent: 'Europe',   region: 'Southeastern Europe' },
+  { city: 'Reykjavik',          wikiTitle: 'Reykjavík',              country: 'Iceland',                 continent: 'Europe',   region: 'Northern Europe' },
+  { city: 'Riga',               wikiTitle: 'Riga',                   country: 'Latvia',                  continent: 'Europe',   region: 'Northern Europe' },
+  { city: 'Rome',               wikiTitle: 'Rome',                   country: 'Italy',                   continent: 'Europe',   region: 'Southern Europe' },
+  { city: 'Sarajevo',           wikiTitle: 'Sarajevo',               country: 'Bosnia and Herzegovina',  continent: 'Europe',   region: 'Southeastern Europe' },
+  { city: 'Skopje',             wikiTitle: 'Skopje',                 country: 'North Macedonia',         continent: 'Europe',   region: 'Southeastern Europe' },
+  { city: 'Sofia',              wikiTitle: 'Sofia',                  country: 'Bulgaria',                continent: 'Europe',   region: 'Eastern Europe' },
+  { city: 'Stockholm',          wikiTitle: 'Stockholm',              country: 'Sweden',                  continent: 'Europe',   region: 'Northern Europe' },
+  { city: 'Tallinn',            wikiTitle: 'Tallinn',                country: 'Estonia',                 continent: 'Europe',   region: 'Northern Europe' },
+  { city: 'Tirana',             wikiTitle: 'Tirana',                 country: 'Albania',                 continent: 'Europe',   region: 'Southeastern Europe' },
+  { city: 'Valletta',           wikiTitle: 'Valletta',               country: 'Malta',                   continent: 'Europe',   region: 'Southern Europe' },
+  { city: 'Vatican City',       wikiTitle: 'Vatican City',           country: 'Vatican City',            continent: 'Europe',   region: 'Southern Europe' },
+  { city: 'Vienna',             wikiTitle: 'Vienna',                 country: 'Austria',                 continent: 'Europe',   region: 'Central Europe' },
+  { city: 'Vilnius',            wikiTitle: 'Vilnius',                country: 'Lithuania',               continent: 'Europe',   region: 'Northern Europe' },
+  { city: 'Warsaw',             wikiTitle: 'Warsaw',                 country: 'Poland',                  continent: 'Europe',   region: 'Central Europe' },
+  { city: 'Zagreb',             wikiTitle: 'Zagreb',                 country: 'Croatia',                 continent: 'Europe',   region: 'Southeastern Europe' },
+  // Americas
+  { city: 'Asuncion',           wikiTitle: 'Asunción',               country: 'Paraguay',                continent: 'Americas', region: 'South America' },
+  { city: 'Bogota',             wikiTitle: 'Bogotá',                 country: 'Colombia',                continent: 'Americas', region: 'South America' },
+  { city: 'Brasilia',           wikiTitle: 'Brasília',               country: 'Brazil',                  continent: 'Americas', region: 'South America' },
+  { city: 'Buenos Aires',       wikiTitle: 'Buenos Aires',           country: 'Argentina',               continent: 'Americas', region: 'South America' },
+  { city: 'Caracas',            wikiTitle: 'Caracas',                country: 'Venezuela',               continent: 'Americas', region: 'South America' },
+  { city: 'Georgetown',         wikiTitle: 'Georgetown, Guyana',     country: 'Guyana',                  continent: 'Americas', region: 'South America' },
+  { city: 'Guatemala City',     wikiTitle: 'Guatemala City',         country: 'Guatemala',               continent: 'Americas', region: 'Central America' },
+  { city: 'Havana',             wikiTitle: 'Havana',                 country: 'Cuba',                    continent: 'Americas', region: 'Caribbean' },
+  { city: 'Kingston',           wikiTitle: 'Kingston, Jamaica',      country: 'Jamaica',                 continent: 'Americas', region: 'Caribbean' },
+  { city: 'La Paz',             wikiTitle: 'La Paz',                 country: 'Bolivia',                 continent: 'Americas', region: 'South America' },
+  { city: 'Lima',               wikiTitle: 'Lima',                   country: 'Peru',                    continent: 'Americas', region: 'South America' },
+  { city: 'Managua',            wikiTitle: 'Managua',                country: 'Nicaragua',               continent: 'Americas', region: 'Central America' },
+  { city: 'Mexico City',        wikiTitle: 'Mexico City',            country: 'Mexico',                  continent: 'Americas', region: 'North America' },
+  { city: 'Montevideo',         wikiTitle: 'Montevideo',             country: 'Uruguay',                 continent: 'Americas', region: 'South America' },
+  { city: 'Nassau',             wikiTitle: 'Nassau, Bahamas',        country: 'Bahamas',                 continent: 'Americas', region: 'Caribbean' },
+  { city: 'Ottawa',             wikiTitle: 'Ottawa',                 country: 'Canada',                  continent: 'Americas', region: 'North America' },
+  { city: 'Panama City',        wikiTitle: 'Panama City',            country: 'Panama',                  continent: 'Americas', region: 'Central America' },
+  { city: 'Paramaribo',         wikiTitle: 'Paramaribo',             country: 'Suriname',                continent: 'Americas', region: 'South America' },
+  { city: 'Port-au-Prince',     wikiTitle: 'Port-au-Prince',         country: 'Haiti',                   continent: 'Americas', region: 'Caribbean' },
+  { city: 'Port of Spain',      wikiTitle: 'Port of Spain',          country: 'Trinidad and Tobago',     continent: 'Americas', region: 'Caribbean' },
+  { city: 'Quito',              wikiTitle: 'Quito',                  country: 'Ecuador',                 continent: 'Americas', region: 'South America' },
+  { city: 'San Jose',           wikiTitle: 'San José, Costa Rica',   country: 'Costa Rica',              continent: 'Americas', region: 'Central America' },
+  { city: 'San Salvador',       wikiTitle: 'San Salvador',           country: 'El Salvador',             continent: 'Americas', region: 'Central America' },
+  { city: 'Santiago',           wikiTitle: 'Santiago',               country: 'Chile',                   continent: 'Americas', region: 'South America' },
+  { city: 'Santo Domingo',      wikiTitle: 'Santo Domingo',          country: 'Dominican Republic',      continent: 'Americas', region: 'Caribbean' },
+  { city: 'Tegucigalpa',        wikiTitle: 'Tegucigalpa',            country: 'Honduras',                continent: 'Americas', region: 'Central America' },
+  { city: 'Washington',         wikiTitle: 'Washington, D.C.',       country: 'United States',           continent: 'Americas', region: 'North America' },
+  // Africa
+  { city: 'Abuja',              wikiTitle: 'Abuja',                  country: 'Nigeria',                 continent: 'Africa',   region: 'West Africa' },
+  { city: 'Accra',              wikiTitle: 'Accra',                  country: 'Ghana',                   continent: 'Africa',   region: 'West Africa' },
+  { city: 'Addis Ababa',        wikiTitle: 'Addis Ababa',            country: 'Ethiopia',                continent: 'Africa',   region: 'East Africa' },
+  { city: 'Algiers',            wikiTitle: 'Algiers',                country: 'Algeria',                 continent: 'Africa',   region: 'North Africa' },
+  { city: 'Antananarivo',       wikiTitle: 'Antananarivo',           country: 'Madagascar',              continent: 'Africa',   region: 'East Africa' },
+  { city: 'Asmara',             wikiTitle: 'Asmara',                 country: 'Eritrea',                 continent: 'Africa',   region: 'East Africa' },
+  { city: 'Banjul',             wikiTitle: 'Banjul',                 country: 'Gambia',                  continent: 'Africa',   region: 'West Africa' },
+  { city: 'Bissau',             wikiTitle: 'Bissau',                 country: 'Guinea-Bissau',           continent: 'Africa',   region: 'West Africa' },
+  { city: 'Brazzaville',        wikiTitle: 'Brazzaville',            country: 'Republic of the Congo',   continent: 'Africa',   region: 'Central Africa' },
+  { city: 'Cairo',              wikiTitle: 'Cairo',                  country: 'Egypt',                   continent: 'Africa',   region: 'North Africa' },
+  { city: 'Conakry',            wikiTitle: 'Conakry',                country: 'Guinea',                  continent: 'Africa',   region: 'West Africa' },
+  { city: 'Dakar',              wikiTitle: 'Dakar',                  country: 'Senegal',                 continent: 'Africa',   region: 'West Africa' },
+  { city: 'Djibouti',           wikiTitle: 'Djibouti City',          country: 'Djibouti',                continent: 'Africa',   region: 'East Africa' },
+  { city: 'Dodoma',             wikiTitle: 'Dodoma',                 country: 'Tanzania',                continent: 'Africa',   region: 'East Africa' },
+  { city: 'Freetown',           wikiTitle: 'Freetown',               country: 'Sierra Leone',            continent: 'Africa',   region: 'West Africa' },
+  { city: 'Gaborone',           wikiTitle: 'Gaborone',               country: 'Botswana',                continent: 'Africa',   region: 'Southern Africa' },
+  { city: 'Harare',             wikiTitle: 'Harare',                 country: 'Zimbabwe',                continent: 'Africa',   region: 'Southern Africa' },
+  { city: 'Juba',               wikiTitle: 'Juba',                   country: 'South Sudan',             continent: 'Africa',   region: 'East Africa' },
+  { city: 'Kampala',            wikiTitle: 'Kampala',                country: 'Uganda',                  continent: 'Africa',   region: 'East Africa' },
+  { city: 'Khartoum',           wikiTitle: 'Khartoum',               country: 'Sudan',                   continent: 'Africa',   region: 'North Africa' },
+  { city: 'Kigali',             wikiTitle: 'Kigali',                 country: 'Rwanda',                  continent: 'Africa',   region: 'East Africa' },
+  { city: 'Kinshasa',           wikiTitle: 'Kinshasa',               country: 'DR Congo',                continent: 'Africa',   region: 'Central Africa' },
+  { city: 'Libreville',         wikiTitle: 'Libreville',             country: 'Gabon',                   continent: 'Africa',   region: 'Central Africa' },
+  { city: 'Lilongwe',           wikiTitle: 'Lilongwe',               country: 'Malawi',                  continent: 'Africa',   region: 'Southern Africa' },
+  { city: 'Lome',               wikiTitle: 'Lomé',                   country: 'Togo',                    continent: 'Africa',   region: 'West Africa' },
+  { city: 'Luanda',             wikiTitle: 'Luanda',                 country: 'Angola',                  continent: 'Africa',   region: 'Central Africa' },
+  { city: 'Lusaka',             wikiTitle: 'Lusaka',                 country: 'Zambia',                  continent: 'Africa',   region: 'Southern Africa' },
+  { city: 'Malabo',             wikiTitle: 'Malabo',                 country: 'Equatorial Guinea',       continent: 'Africa',   region: 'Central Africa' },
+  { city: 'Maputo',             wikiTitle: 'Maputo',                 country: 'Mozambique',              continent: 'Africa',   region: 'Southern Africa' },
+  { city: 'Maseru',             wikiTitle: 'Maseru',                 country: 'Lesotho',                 continent: 'Africa',   region: 'Southern Africa' },
+  { city: 'Mbabane',            wikiTitle: 'Mbabane',                country: 'Eswatini',                continent: 'Africa',   region: 'Southern Africa' },
+  { city: 'Mogadishu',          wikiTitle: 'Mogadishu',              country: 'Somalia',                 continent: 'Africa',   region: 'East Africa' },
+  { city: 'Monrovia',           wikiTitle: 'Monrovia',               country: 'Liberia',                 continent: 'Africa',   region: 'West Africa' },
+  { city: 'Moroni',             wikiTitle: 'Moroni, Comoros',        country: 'Comoros',                 continent: 'Africa',   region: 'East Africa' },
+  { city: 'Nairobi',            wikiTitle: 'Nairobi',                country: 'Kenya',                   continent: 'Africa',   region: 'East Africa' },
+  { city: "N'Djamena",          wikiTitle: "N'Djamena",              country: 'Chad',                    continent: 'Africa',   region: 'Central Africa' },
+  { city: 'Niamey',             wikiTitle: 'Niamey',                 country: 'Niger',                   continent: 'Africa',   region: 'West Africa' },
+  { city: 'Nouakchott',         wikiTitle: 'Nouakchott',             country: 'Mauritania',              continent: 'Africa',   region: 'West Africa' },
+  { city: 'Ouagadougou',        wikiTitle: 'Ouagadougou',            country: 'Burkina Faso',            continent: 'Africa',   region: 'West Africa' },
+  { city: 'Porto-Novo',         wikiTitle: 'Porto-Novo',             country: 'Benin',                   continent: 'Africa',   region: 'West Africa' },
+  { city: 'Praia',              wikiTitle: 'Praia',                  country: 'Cape Verde',              continent: 'Africa',   region: 'West Africa' },
+  { city: 'Rabat',              wikiTitle: 'Rabat',                  country: 'Morocco',                 continent: 'Africa',   region: 'North Africa' },
+  { city: 'Tripoli',            wikiTitle: 'Tripoli',                country: 'Libya',                   continent: 'Africa',   region: 'North Africa' },
+  { city: 'Tunis',              wikiTitle: 'Tunis',                  country: 'Tunisia',                 continent: 'Africa',   region: 'North Africa' },
+  { city: 'Victoria',           wikiTitle: 'Victoria, Seychelles',   country: 'Seychelles',              continent: 'Africa',   region: 'East Africa' },
+  { city: 'Windhoek',           wikiTitle: 'Windhoek',               country: 'Namibia',                 continent: 'Africa',   region: 'Southern Africa' },
+  { city: 'Yamoussoukro',       wikiTitle: 'Yamoussoukro',           country: 'Ivory Coast',             continent: 'Africa',   region: 'West Africa' },
+  // Middle East
+  { city: 'Abu Dhabi',          wikiTitle: 'Abu Dhabi',              country: 'United Arab Emirates',    continent: 'Asia',     region: 'Middle East' },
+  { city: 'Amman',              wikiTitle: 'Amman',                  country: 'Jordan',                  continent: 'Asia',     region: 'Middle East' },
+  { city: 'Ankara',             wikiTitle: 'Ankara',                 country: 'Turkey',                  continent: 'Asia',     region: 'Middle East' },
+  { city: 'Baghdad',            wikiTitle: 'Baghdad',                country: 'Iraq',                    continent: 'Asia',     region: 'Middle East' },
+  { city: 'Beirut',             wikiTitle: 'Beirut',                 country: 'Lebanon',                 continent: 'Asia',     region: 'Middle East' },
+  { city: 'Doha',               wikiTitle: 'Doha',                   country: 'Qatar',                   continent: 'Asia',     region: 'Middle East' },
+  { city: 'Jerusalem',          wikiTitle: 'Jerusalem',              country: 'Israel',                  continent: 'Asia',     region: 'Middle East' },
+  { city: 'Kuwait City',        wikiTitle: 'Kuwait City',            country: 'Kuwait',                  continent: 'Asia',     region: 'Middle East' },
+  { city: 'Manama',             wikiTitle: 'Manama',                 country: 'Bahrain',                 continent: 'Asia',     region: 'Middle East' },
+  { city: 'Muscat',             wikiTitle: 'Muscat',                 country: 'Oman',                    continent: 'Asia',     region: 'Middle East' },
+  { city: 'Riyadh',             wikiTitle: 'Riyadh',                 country: 'Saudi Arabia',            continent: 'Asia',     region: 'Middle East' },
+  { city: 'Sanaa',              wikiTitle: "Sana'a",                 country: 'Yemen',                   continent: 'Asia',     region: 'Middle East' },
+  { city: 'Tehran',             wikiTitle: 'Tehran',                 country: 'Iran',                    continent: 'Asia',     region: 'Middle East' },
+  // Central Asia
+  { city: 'Astana',             wikiTitle: 'Astana',                 country: 'Kazakhstan',              continent: 'Asia',     region: 'Central Asia' },
+  { city: 'Baku',               wikiTitle: 'Baku',                   country: 'Azerbaijan',              continent: 'Asia',     region: 'Central Asia' },
+  { city: 'Bishkek',            wikiTitle: 'Bishkek',                country: 'Kyrgyzstan',              continent: 'Asia',     region: 'Central Asia' },
+  { city: 'Dushanbe',           wikiTitle: 'Dushanbe',               country: 'Tajikistan',              continent: 'Asia',     region: 'Central Asia' },
+  { city: 'Tashkent',           wikiTitle: 'Tashkent',               country: 'Uzbekistan',              continent: 'Asia',     region: 'Central Asia' },
+  { city: 'Yerevan',            wikiTitle: 'Yerevan',                country: 'Armenia',                 continent: 'Asia',     region: 'Central Asia' },
+  // South Asia
+  { city: 'Colombo',            wikiTitle: 'Colombo',                country: 'Sri Lanka',               continent: 'Asia',     region: 'South Asia' },
+  { city: 'Dhaka',              wikiTitle: 'Dhaka',                  country: 'Bangladesh',              continent: 'Asia',     region: 'South Asia' },
+  { city: 'Islamabad',          wikiTitle: 'Islamabad',              country: 'Pakistan',                continent: 'Asia',     region: 'South Asia' },
+  { city: 'Kabul',              wikiTitle: 'Kabul',                  country: 'Afghanistan',             continent: 'Asia',     region: 'South Asia' },
+  { city: 'Kathmandu',          wikiTitle: 'Kathmandu',              country: 'Nepal',                   continent: 'Asia',     region: 'South Asia' },
+  { city: 'New Delhi',          wikiTitle: 'New Delhi',              country: 'India',                   continent: 'Asia',     region: 'South Asia' },
+  { city: 'Thimphu',            wikiTitle: 'Thimphu',                country: 'Bhutan',                  continent: 'Asia',     region: 'South Asia' },
+  // Southeast Asia
+  { city: 'Bandar Seri Begawan', wikiTitle: 'Bandar Seri Begawan',   country: 'Brunei',                  continent: 'Asia',     region: 'Southeast Asia' },
+  { city: 'Bangkok',            wikiTitle: 'Bangkok',                country: 'Thailand',                continent: 'Asia',     region: 'Southeast Asia' },
+  { city: 'Dili',               wikiTitle: 'Dili',                   country: 'Timor-Leste',             continent: 'Asia',     region: 'Southeast Asia' },
+  { city: 'Hanoi',              wikiTitle: 'Hanoi',                  country: 'Vietnam',                 continent: 'Asia',     region: 'Southeast Asia' },
+  { city: 'Jakarta',            wikiTitle: 'Jakarta',                country: 'Indonesia',               continent: 'Asia',     region: 'Southeast Asia' },
+  { city: 'Kuala Lumpur',       wikiTitle: 'Kuala Lumpur',           country: 'Malaysia',                continent: 'Asia',     region: 'Southeast Asia' },
+  { city: 'Manila',             wikiTitle: 'Manila',                 country: 'Philippines',             continent: 'Asia',     region: 'Southeast Asia' },
+  { city: 'Naypyidaw',          wikiTitle: 'Naypyidaw',              country: 'Myanmar',                 continent: 'Asia',     region: 'Southeast Asia' },
+  { city: 'Phnom Penh',         wikiTitle: 'Phnom Penh',             country: 'Cambodia',                continent: 'Asia',     region: 'Southeast Asia' },
+  { city: 'Singapore',          wikiTitle: 'Singapore',              country: 'Singapore',               continent: 'Asia',     region: 'Southeast Asia' },
+  { city: 'Vientiane',          wikiTitle: 'Vientiane',              country: 'Laos',                    continent: 'Asia',     region: 'Southeast Asia' },
+  // East Asia
+  { city: 'Beijing',            wikiTitle: 'Beijing',                country: 'China',                   continent: 'Asia',     region: 'East Asia' },
+  { city: 'Pyongyang',          wikiTitle: 'Pyongyang',              country: 'North Korea',             continent: 'Asia',     region: 'East Asia' },
+  { city: 'Seoul',              wikiTitle: 'Seoul',                  country: 'South Korea',             continent: 'Asia',     region: 'East Asia' },
+  { city: 'Taipei',             wikiTitle: 'Taipei',                 country: 'Taiwan',                  continent: 'Asia',     region: 'East Asia' },
+  { city: 'Tokyo',              wikiTitle: 'Tokyo',                  country: 'Japan',                   continent: 'Asia',     region: 'East Asia' },
+  { city: 'Ulaanbaatar',        wikiTitle: 'Ulaanbaatar',            country: 'Mongolia',                continent: 'Asia',     region: 'East Asia' },
+  // Oceania
+  { city: 'Canberra',           wikiTitle: 'Canberra',               country: 'Australia',               continent: 'Oceania',  region: 'Australasia' },
+  { city: 'Honiara',            wikiTitle: 'Honiara',                country: 'Solomon Islands',         continent: 'Oceania',  region: 'Melanesia' },
+  { city: 'Palikir',            wikiTitle: 'Palikir',                country: 'Micronesia',              continent: 'Oceania',  region: 'Micronesia' },
+  { city: 'Port Moresby',       wikiTitle: 'Port Moresby',           country: 'Papua New Guinea',        continent: 'Oceania',  region: 'Melanesia' },
+  { city: 'Port Vila',          wikiTitle: 'Port Vila',              country: 'Vanuatu',                 continent: 'Oceania',  region: 'Melanesia' },
+  { city: 'Suva',               wikiTitle: 'Suva',                   country: 'Fiji',                    continent: 'Oceania',  region: 'Melanesia' },
+  { city: 'Wellington',         wikiTitle: 'Wellington',             country: 'New Zealand',             continent: 'Oceania',  region: 'Australasia' },
+];
+
+async function fetchCapital() {
+  const capital     = WORLD_CAPITALS[Math.floor(Math.random() * WORLD_CAPITALS.length)];
+  const summaryUrl  = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(capital.wikiTitle)}`;
+  const resp        = await fetchWithTimeout(summaryUrl, {}, 8000);
+  if (!resp.ok) {
+    // Try the city name directly as fallback
+    const fallback = await fetchWithTimeout(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(capital.city)}`, {}, 8000
+    );
+    if (!fallback.ok) throw new Error('Could not load capital city article.');
+    const d = await fallback.json();
+    return buildCapitalArticle(capital, d);
+  }
+  const data = await resp.json();
+  return buildCapitalArticle(capital, data);
+}
+
+function buildCapitalArticle(capital, data) {
+  return {
+    title:       capital.city,
+    description: data.description || '',
+    extract:     data.extract     || '',
+    thumbnail:   data.thumbnail   ? data.thumbnail.source : null,
+    pageUrl:     data.content_urls ? data.content_urls.desktop.page
+                                   : `https://en.wikipedia.org/wiki/${encodeURIComponent(capital.wikiTitle)}`,
+    country:     capital.country,
+    continent:   capital.continent,
+    region:      capital.region,
+  };
+}
+
+function showContinentHint() {
+  const val = state.article.continent;
+  if (!val) { addHintCard('Continent', '<em>Not available.</em>'); return; }
+  addHintCard('Continent', `Continent: <strong>${escapeHtml(val)}</strong>`);
+}
+
+function showRegionHint() {
+  const val = state.article.region;
+  if (!val) { addHintCard('Region', '<em>Not available.</em>'); return; }
+  addHintCard('Region', `Region: <strong>${escapeHtml(val)}</strong>`);
+}
+
+function showCountryHint() {
+  const val = state.article.country;
+  if (!val) { addHintCard('Country', '<em>Not available.</em>'); return; }
+  addHintCard('Country', `Capital of: <strong>${escapeHtml(val)}</strong>`);
 }
 
 // ── Boot ──────────────────────────────────────────────────────
