@@ -88,6 +88,27 @@ html, body {
 .btn-primary:hover { background: var(--blue-dark); }
 .btn-primary:active { transform: scale(0.97); }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--red);
+  border: 1px solid var(--red);
+  padding: 7px 18px;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-danger:hover:not(:disabled) { background: var(--red); color: var(--white); }
+.btn-danger:disabled { opacity: 0.35; cursor: not-allowed; }
+
 .btn-retry {
   background: transparent;
   color: var(--white);
@@ -99,6 +120,44 @@ html, body {
   margin-left: 12px;
 }
 .btn-retry:hover { background: rgba(255,255,255,.15); }
+
+/* --- Tab Bar --- */
+.tab-bar {
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 20px;
+  max-width: 100%;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 12px 20px;
+  font-size: 0.95rem;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+
+.tab-date {
+  margin-left: auto;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  padding: 0 4px;
+  font-style: italic;
+}
 
 /* --- Loading Overlay --- */
 .loading-overlay {
@@ -363,8 +422,9 @@ circle.body-part.visible {
 .hint-card ul li { margin-bottom: 2px; }
 
 .hint-card img {
-  max-width: 140px;
-  max-height: 140px;
+  max-width: 360px;
+  max-height: 360px;
+  width: 100%;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   display: block;
@@ -503,6 +563,54 @@ circle.body-part.visible {
   border-color: #b22;
   color: var(--white);
   opacity: 0.6;
+}
+
+/* --- Icon Button (dark mode toggle) --- */
+.btn-icon {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 36px;
+  height: 36px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.btn-icon:hover { background: var(--bg); }
+
+/* --- Dark Mode --- */
+[data-theme="dark"] {
+  --bg:        #1a1b1e;
+  --white:     #2a2b2e;
+  --text:      #f0f0f0;
+  --text-muted:#a0a6b0;
+  --border:    #3d4147;
+  --blue:      #6ea8fe;
+  --blue-dark: #5592e8;
+  --shadow:    0 1px 3px rgba(0,0,0,.4);
+}
+
+[data-theme="dark"] .loading-overlay {
+  background: rgba(26,27,30,.92);
+}
+
+[data-theme="dark"] .result-overlay {
+  background: rgba(0,0,0,.8);
+}
+
+[data-theme="dark"] .key-btn {
+  box-shadow: 0 1px 0 #111;
+}
+
+[data-theme="dark"] circle.body-part.visible {
+  fill: var(--white);
+}
+
+[data-theme="dark"] .hint-area {
+  border-top-color: var(--border);
 }
 
 /* --- Utility --- */

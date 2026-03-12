@@ -8,7 +8,8 @@
 // ── Constants ─────────────────────────────────────────────────
 const MAX_WRONG   = 6;
 const BODY_PARTS  = ['bp-head', 'bp-body', 'bp-left-arm', 'bp-right-arm', 'bp-left-leg', 'bp-right-leg'];
-const AUTO_REVEAL = new Set(['-', "'", '\u2019', '\u2018', '.', '\u2013', '\u2014']);
+// Any character that isn't A-Z is auto-revealed (numbers, punctuation, spaces handled separately)
+const isAutoReveal = char => !/[A-Z]/.test(char);
 
 const QWERTY_ROWS = [
   ['Q','W','E','R','T','Y','U','I','O','P'],
@@ -20,6 +21,10 @@ const CAT_FILTER_PREFIXES = [
   'articles', 'pages', 'cs1', 'wikipedia', 'all ', 'use ', 'harv',
   'webarchive', 'good articles', 'featured articles',
 ];
+
+// ── Mode ───────────────────────────────────────────────────────
+let currentMode = 'daily';
+let dailyCache  = { article: null, date: null }; // avoid re-fetching on tab switch
 
 // ── State ──────────────────────────────────────────────────────
 let state = {
@@ -46,6 +51,9 @@ const resultMessage  = $('resultMessage');
 const resultLink     = $('resultLink');
 const playAgainBtn   = $('playAgainBtn');
 const newGameBtn     = $('newGameBtn');
+const giveUpBtn      = $('giveUpBtn');
+const darkModeBtn    = $('darkModeBtn');
+const dailyDateLabel = $('dailyDateLabel');
 const wrongCountEl   = $('wrongCount');
 const wrongLettersEl = $('wrongLetters');
 const wordDisplay    = $('wordDisplay');
@@ -56,6 +64,7 @@ const keyboard       = $('keyboard');
 function init() {
   buildKeyboard();
   attachEventListeners();
+  updateDailyLabel();
   startNewGame();
 }
 
@@ -63,6 +72,17 @@ function attachEventListeners() {
   newGameBtn.addEventListener('click', startNewGame);
   playAgainBtn.addEventListener('click', startNewGame);
   retryBtn.addEventListener('click', startNewGame);
+  giveUpBtn.addEventListener('click', () => { if (!state.gameOver && state.answer) triggerLoss(); });
+  darkModeBtn.addEventListener('click', () => {
+    const isDark = document.documentElement.dataset.theme === 'dark';
+    document.documentElement.dataset.theme = isDark ? '' : 'dark';
+    darkModeBtn.textContent = isDark ? '🌙' : '☀️';
+  });
+
+  // Tab switching
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
 
   // Physical keyboard support
   document.addEventListener('keydown', e => {
@@ -128,12 +148,14 @@ async function startNewGame() {
   updateWrongDisplay();
   wordDisplay.innerHTML = '';
 
+  giveUpBtn.disabled = true;
   showLoading();
   try {
-    const article = await fetchValidArticle();
+    const article = currentMode === 'daily' ? await fetchDailyArticle() : await fetchValidArticle();
     hideLoading();
     state.article = article;
     state.answer  = article.title.toUpperCase();
+    giveUpBtn.disabled = false;
     renderWordDisplay();
     updateHangman();
   } catch (err) {
@@ -143,7 +165,79 @@ async function startNewGame() {
   }
 }
 
+// ── Tab Switching ─────────────────────────────────────────────
+function switchTab(mode) {
+  if (mode === currentMode) return;
+  currentMode = mode;
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    const active = btn.dataset.tab === mode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active);
+  });
+  updateDailyLabel();
+  startNewGame();
+}
+
+function updateDailyLabel() {
+  if (currentMode === 'daily') {
+    const now = new Date();
+    const label = now.toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' });
+    dailyDateLabel.textContent = label;
+  } else {
+    dailyDateLabel.textContent = '';
+  }
+}
+
 // ── Wikipedia API Calls ───────────────────────────────────────
+
+// Daily puzzle: pick a deterministic article from Wikipedia's "On This Day" pool
+async function fetchDailyArticle() {
+  const now     = new Date();
+  const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD UTC
+
+  // Return cached article if still the same UTC day
+  if (dailyCache.date === dateStr && dailyCache.article) return dailyCache.article;
+
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const day   = String(now.getUTCDate()).padStart(2, '0');
+  const url   = `https://en.wikipedia.org/api/rest_v1/feed/onthisday/all/${month}/${day}`;
+
+  const resp = await fetchWithTimeout(url, {}, 8000);
+  if (!resp.ok) throw new Error(`On This Day API returned ${resp.status}`);
+  const data = await resp.json();
+
+  // Collect all linked pages from events, births, deaths
+  const pool = [];
+  for (const category of ['events', 'births', 'deaths']) {
+    for (const entry of (data[category] || [])) {
+      for (const page of (entry.pages || [])) {
+        const title = page.titles?.normalized || page.title || '';
+        if (!title || title.includes(':')) continue;
+        if ((page.description || '').toLowerCase().includes('disambiguation')) continue;
+        const words = title.trim().split(/\s+/);
+        if (title.length < 3 || words.length > 5) continue;
+        pool.push({
+          title,
+          description:  page.description   || '',
+          extract:      page.extract        || '',
+          thumbnail:    page.thumbnail      ? page.thumbnail.source : null,
+          pageUrl:      page.content_urls   ? page.content_urls.desktop.page
+                                            : `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`,
+        });
+      }
+    }
+  }
+
+  if (pool.length === 0) throw new Error('No suitable articles found for today\'s date.');
+
+  // Deterministic pick: seed from full UTC date integer (YYYYMMDD)
+  const seed  = parseInt(dateStr.replace(/-/g, ''), 10);
+  const article = pool[seed % pool.length];
+
+  dailyCache = { article, date: dateStr };
+  return article;
+}
+
 async function fetchValidArticle(attempts = 0) {
   if (attempts > 15) throw new Error('Could not find a suitable article after many attempts. Please retry.');
 
@@ -236,7 +330,7 @@ function renderWordDisplay() {
       const lineEl = document.createElement('span');
       lineEl.className = 'letter-line';
 
-      if (AUTO_REVEAL.has(char)) {
+      if (isAutoReveal(char)) {
         charEl.textContent = char;
         tile.classList.add('auto-reveal');
         lineEl.style.background = 'transparent';
@@ -264,7 +358,7 @@ function refreshWordDisplay() {
   const charEls = wordDisplay.querySelectorAll('.letter-char');
   charEls.forEach(el => {
     const char = el.dataset.char;
-    if (!char || AUTO_REVEAL.has(char)) return;
+    if (!char || isAutoReveal(char)) return;
     if (state.guessed.has(char)) {
       el.textContent = char;
       el.closest('.letter-tile').classList.add('correct');
@@ -318,7 +412,7 @@ function updateWrongDisplay() {
 
 // ── Win / Loss Checks ─────────────────────────────────────────
 function checkWin() {
-  const answerChars = [...state.answer].filter(c => !AUTO_REVEAL.has(c) && c !== ' ');
+  const answerChars = [...state.answer].filter(c => !isAutoReveal(c));
   const allGuessed  = answerChars.every(c => state.guessed.has(c));
   if (allGuessed) triggerWin();
 }
@@ -334,7 +428,7 @@ function triggerWin() {
   // Reveal all letters
   document.querySelectorAll('.letter-char').forEach(el => {
     const char = el.dataset.char;
-    if (char && !AUTO_REVEAL.has(char)) el.textContent = char;
+    if (char && !isAutoReveal(char)) el.textContent = char;
     el.closest('.letter-tile')?.classList.add('correct');
   });
   setTimeout(() => showResult(true), 500);
@@ -347,7 +441,7 @@ function triggerLoss() {
   // Reveal answer
   document.querySelectorAll('.letter-char').forEach(el => {
     const char = el.dataset.char;
-    if (char && !AUTO_REVEAL.has(char) && !state.guessed.has(char)) {
+    if (char && !isAutoReveal(char) && !state.guessed.has(char)) {
       el.textContent = char;
       el.style.color = '#d33';
     }
@@ -357,6 +451,7 @@ function triggerLoss() {
 
 function disableKeyboard() {
   document.querySelectorAll('.key-btn').forEach(btn => btn.disabled = true);
+  giveUpBtn.disabled = true;
 }
 
 // ── Result Overlay ────────────────────────────────────────────

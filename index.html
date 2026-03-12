@@ -18,9 +18,24 @@
         </svg>
         <h1 class="site-title">Wiki Hangman</h1>
       </div>
-      <button id="newGameBtn" class="btn-primary">New Game</button>
+      <div class="header-actions">
+        <button id="darkModeBtn" class="btn-icon" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+        <button id="giveUpBtn" class="btn-danger" disabled>Give Up</button>
+        <button id="newGameBtn" class="btn-primary">New Game</button>
+      </div>
     </div>
   </header>
+
+  <!-- Tab Bar -->
+  <nav class="tab-bar" role="tablist" aria-label="Game mode">
+    <button class="tab-btn active" id="tab-daily" data-tab="daily" role="tab" aria-selected="true">
+      📅 Daily
+    </button>
+    <button class="tab-btn" id="tab-random" data-tab="random" role="tab" aria-selected="false">
+      🎲 Random
+    </button>
+    <span id="dailyDateLabel" class="tab-date"></span>
+  </nav>
 
   <!-- Loading Overlay -->
   <div id="loadingOverlay" class="loading-overlay hidden">
@@ -84,21 +99,9 @@
     <section class="panel panel-right" aria-label="Lifelines">
       <h2 class="lifelines-heading">Lifelines</h2>
       <div class="lifelines-grid">
-        <button class="lifeline-btn" id="ll-description" data-lifeline="description" title="Short description of the article">
-          <span class="ll-icon">📋</span>
-          <span class="ll-label">Description</span>
-        </button>
         <button class="lifeline-btn" id="ll-categories" data-lifeline="categories" title="Show article categories">
           <span class="ll-icon">🏷️</span>
           <span class="ll-label">Categories</span>
-        </button>
-        <button class="lifeline-btn" id="ll-contents" data-lifeline="contents" title="Show table of contents">
-          <span class="ll-icon">📚</span>
-          <span class="ll-label">Contents</span>
-        </button>
-        <button class="lifeline-btn" id="ll-related" data-lifeline="related" title="Show related articles">
-          <span class="ll-icon">🔗</span>
-          <span class="ll-label">Related</span>
         </button>
         <button class="lifeline-btn" id="ll-image" data-lifeline="image" title="Reveal article thumbnail">
           <span class="ll-icon">🖼️</span>
