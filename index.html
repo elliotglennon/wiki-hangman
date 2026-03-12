@@ -70,9 +70,6 @@
 
     <!-- Left Panel: Hangman -->
     <section class="panel panel-left" aria-label="Hangman">
-      <div class="article-thumb-container">
-        <img id="articleThumb" class="article-thumb hidden" alt="Article image" />
-      </div>
       <div class="hangman-container">
         <svg id="hangmanSvg" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" aria-label="Hangman figure">
           <!-- Gallows (always shown) -->
@@ -99,6 +96,9 @@
 
     <!-- Center Panel: Word + Hints -->
     <section class="panel panel-center" aria-label="Game area">
+      <div class="article-thumb-container">
+        <img id="articleThumb" class="article-thumb hidden" alt="Article image" />
+      </div>
       <div id="wordDisplay" class="word-display" aria-live="polite" aria-label="Word to guess"></div>
       <div id="hintArea" class="hint-area"></div>
     </section>

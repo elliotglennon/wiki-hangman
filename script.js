@@ -24,6 +24,17 @@ const CAT_FILTER_PREFIXES = [
 
 const DAILY_STORAGE_KEY = 'wikihangman_daily_v1';
 
+// Common words excluded from redaction (won't give the answer away)
+const STOP_WORDS = new Set([
+  'a','an','the','and','or','but','in','on','at','to','of','for','with',
+  'by','from','as','is','was','are','were','be','been','has','had','have',
+  'do','did','does','that','this','it','its','up','out','about','than',
+  'then','if','so','not','no','he','she','they','we','you','i','me',
+  'him','her','them','us','who','which','what','into','over','after',
+  'before','between','during','under','through','while','would','could',
+  'should','one','two','three','new','old','first','last','great',
+]);
+
 // ── Mode ───────────────────────────────────────────────────────
 let currentMode = 'daily';
 let dailyCache  = { article: null, date: null };
@@ -335,9 +346,14 @@ async function fetchCategories(title) {
   const pages   = data.query?.pages || {};
   const page    = Object.values(pages)[0];
   const cats    = (page?.categories || []).map(c => c.title.replace(/^Category:/, ''));
+  const meaningful = getMeaningfulTitleWords();
   return cats.filter(cat => {
     const lower = cat.toLowerCase();
-    return !CAT_FILTER_PREFIXES.some(p => lower.startsWith(p));
+    // Remove maintenance categories
+    if (CAT_FILTER_PREFIXES.some(p => lower.startsWith(p))) return false;
+    // Remove any category that contains a meaningful title word
+    if (meaningful.some(w => lower.includes(w.toLowerCase()))) return false;
+    return true;
   }).slice(0, 5);
 }
 
@@ -564,6 +580,28 @@ function launchConfetti() {
   burst(800);
 }
 
+// ── Redaction Helpers ─────────────────────────────────────────
+function getMeaningfulTitleWords() {
+  return state.article.title
+    .split(/\s+/)
+    .map(w => w.replace(/[^a-zA-Z0-9]/g, ''))  // strip surrounding punctuation
+    .filter(w => w.length > 1 && !STOP_WORDS.has(w.toLowerCase()));
+}
+
+function redactTitleWords(text) {
+  // First redact the full title as a phrase
+  const fullTitle = state.article.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  text = text.replace(new RegExp(fullTitle, 'gi'), '___');
+
+  // Then redact each meaningful word individually using word boundaries
+  getMeaningfulTitleWords().forEach(word => {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    text = text.replace(new RegExp(`\\b${escaped}\\b`, 'gi'), '___');
+  });
+
+  return text;
+}
+
 // ── Lifelines ─────────────────────────────────────────────────
 async function activateLifeline(name) {
   state.lifelinesUsed.add(name);
@@ -610,14 +648,10 @@ function showFirstSentenceHint() {
   const extract = state.article.extract || '';
   if (!extract) { addHintCard('First Sentence', '<em>No extract available.</em>'); return; }
 
-  const match    = extract.match(/^.+?[.!?](?:\s|$)/);
-  let sentence   = match ? match[0].trim() : extract.slice(0, 200).trim();
+  const match  = extract.match(/^.+?[.!?](?:\s|$)/);
+  let sentence = match ? match[0].trim() : extract.slice(0, 200).trim();
 
-  state.article.title.split(/\s+/).filter(w => w.length > 0).forEach(word => {
-    const re = new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-    sentence = sentence.replace(re, '___');
-  });
-
+  sentence = redactTitleWords(sentence);
   addHintCard('First Sentence', escapeHtml(sentence));
 }
 

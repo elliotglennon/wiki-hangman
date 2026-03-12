@@ -613,22 +613,22 @@ circle.body-part.visible {
   border-top-color: var(--border);
 }
 
-/* --- Article Thumbnail (permanent) --- */
+/* --- Article Thumbnail (permanent, center panel) --- */
 .article-thumb-container {
   width: 100%;
   display: flex;
   justify-content: center;
-  margin-bottom: 8px;
+  margin-bottom: 14px;
 }
 
 .article-thumb {
   width: 100%;
-  max-width: 180px;
-  max-height: 180px;
-  object-fit: cover;
+  max-height: 300px;
+  object-fit: contain;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
+  background: var(--bg);
 }
 
 /* --- Result Actions --- */
