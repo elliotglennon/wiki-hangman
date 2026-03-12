@@ -621,14 +621,15 @@ function launchConfetti() {
           `top: ${30 + Math.random() * 30}%`,
         ].join(';');
         document.body.appendChild(el);
-        setTimeout(() => el.remove(), 2200);
+        setTimeout(() => el.remove(), 4200);
       }
     }, delay);
   }
 
   burst(0);
-  burst(400);
-  burst(800);
+  burst(600);
+  burst(1200);
+  burst(1800);
 }
 
 function launchSadRain() {
@@ -640,15 +641,15 @@ function launchSadRain() {
       el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
       el.style.cssText = [
         `left: ${Math.random() * 100}%`,
-        `--duration: ${2 + Math.random() * 2}s`,
+        `--duration: ${3.5 + Math.random() * 2.5}s`,
         `--delay: 0s`,
         `--drift: ${Math.random() * 60 - 30}px`,
         `--rot: ${Math.random() * 40 - 20}deg`,
-        `font-size: ${1.2 + Math.random() * 1.4}rem`,
+        `font-size: ${3.6 + Math.random() * 4.2}rem`,
       ].join(';');
       document.body.appendChild(el);
-      setTimeout(() => el.remove(), 4500);
-    }, Math.random() * 1200);
+      setTimeout(() => el.remove(), 9000);
+    }, Math.random() * 2500);
   }
 }
 

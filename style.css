@@ -226,7 +226,7 @@ html, body {
 }
 
 .result-icon {
-  font-size: 3rem;
+  font-size: 9rem;
   line-height: 1;
 }
 
@@ -640,7 +640,7 @@ circle.body-part.visible {
 
 .article-thumb {
   width: 100%;
-  max-height: 300px;
+  max-height: 450px;
   object-fit: contain;
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -710,7 +710,7 @@ circle.body-part.visible {
   position: fixed;
   pointer-events: none;
   z-index: 500;
-  animation: confetti-burst 1.8s ease-out forwards;
+  animation: confetti-burst 3.5s ease-out forwards;
 }
 
 @keyframes confetti-burst {
