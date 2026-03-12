@@ -35,6 +35,9 @@
     <button class="tab-btn" id="tab-random" data-tab="random" role="tab" aria-selected="false">
       🎲 Random
     </button>
+    <button class="tab-btn" id="tab-football" data-tab="football" role="tab" aria-selected="false">
+      ⚽ Premier League
+    </button>
     <span id="dailyDateLabel" class="tab-date"></span>
     <span id="sessionScore" class="session-score hidden"></span>
   </nav>
@@ -107,20 +110,7 @@
     <!-- Right Panel: Lifelines -->
     <section class="panel panel-right" aria-label="Lifelines">
       <h2 class="lifelines-heading">Lifelines</h2>
-      <div class="lifelines-grid">
-        <button class="lifeline-btn" id="ll-categories" data-lifeline="categories" title="Show article categories">
-          <span class="ll-icon">🏷️</span>
-          <span class="ll-label">Categories</span>
-        </button>
-        <button class="lifeline-btn" id="ll-freeletter" data-lifeline="freeletter" title="Reveal a random letter from the answer">
-          <span class="ll-icon">🎁</span>
-          <span class="ll-label">Free Letter</span>
-        </button>
-        <button class="lifeline-btn" id="ll-firstsentence" data-lifeline="firstsentence" title="Show first sentence (title redacted)">
-          <span class="ll-icon">📖</span>
-          <span class="ll-label">First Sentence</span>
-        </button>
-      </div>
+      <div class="lifelines-grid" id="lifelinesGrid"></div>
     </section>
 
   </main>

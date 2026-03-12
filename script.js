@@ -42,6 +42,20 @@ const LOSS_TAUNTS = [
   "A moment of silence for all the letters you didn't guess.",
 ];
 
+// ── Lifeline definitions per mode ─────────────────────────────
+const MODE_LIFELINES = {
+  wiki: [
+    { id: 'categories',    icon: '🏷️', label: 'Categories',    title: 'Show article categories' },
+    { id: 'freeletter',    icon: '🎁', label: 'Free Letter',    title: 'Reveal a random letter from the answer' },
+    { id: 'firstsentence', icon: '📖', label: 'First Sentence', title: 'Show first sentence (title redacted)' },
+  ],
+  football: [
+    { id: 'clubs',       icon: '🏟️', label: 'Clubs',       title: 'Show clubs this player appeared for' },
+    { id: 'position',    icon: '⚽', label: 'Position',    title: "Reveal this player's playing position" },
+    { id: 'nationality', icon: '🌍', label: 'Nationality', title: "Reveal this player's nationality" },
+  ],
+};
+
 // Common words excluded from redaction (won't give the answer away)
 const STOP_WORDS = new Set([
   'a','an','the','and','or','but','in','on','at','to','of','for','with',
@@ -134,6 +148,7 @@ function utcDateStr() {
 // ── Initialisation ─────────────────────────────────────────────
 function init() {
   buildKeyboard();
+  buildLifelineButtons();
   attachEventListeners();
   updateDailyLabel();
 
@@ -177,13 +192,26 @@ function attachEventListeners() {
     if (/^[A-Z]$/.test(key)) guessLetter(key);
   });
 
-  // Lifeline buttons
-  document.querySelectorAll('.lifeline-btn').forEach(btn => {
+}
+
+// ── Lifeline Buttons (dynamic per mode) ───────────────────────
+function buildLifelineButtons() {
+  const grid = document.getElementById('lifelinesGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const set = currentMode === 'football' ? MODE_LIFELINES.football : MODE_LIFELINES.wiki;
+  set.forEach(({ id, icon, label, title }) => {
+    const btn = document.createElement('button');
+    btn.className = 'lifeline-btn';
+    btn.id = `ll-${id}`;
+    btn.dataset.lifeline = id;
+    btn.title = title;
+    btn.innerHTML = `<span class="ll-icon">${icon}</span><span class="ll-label">${label}</span>`;
     btn.addEventListener('click', () => {
       if (state.gameOver) return;
-      const ll = btn.dataset.lifeline;
-      if (!state.lifelinesUsed.has(ll)) activateLifeline(ll);
+      if (!state.lifelinesUsed.has(id)) activateLifeline(id);
     });
+    grid.appendChild(btn);
   });
 }
 
@@ -242,9 +270,11 @@ async function startNewGame() {
   }
 
   giveUpBtn.disabled = true;
-  showLoading();
+  showLoading(currentMode === 'football' ? 'Finding a Premier League player…' : 'Fetching a Wikipedia article…');
   try {
-    const article = currentMode === 'daily' ? await fetchDailyArticle() : await fetchValidArticle();
+    const article = currentMode === 'daily'    ? await fetchDailyArticle()
+                  : currentMode === 'football' ? await fetchFootballPlayer()
+                  :                              await fetchValidArticle();
     hideLoading();
     state.article = article;
     state.answer  = article.title.toUpperCase();
@@ -268,14 +298,15 @@ function switchTab(mode) {
     btn.classList.toggle('active', active);
     btn.setAttribute('aria-selected', active);
   });
-  if (mode === 'random') { sessionWins = 0; sessionTotal = 0; }
+  if (mode === 'random' || mode === 'football') { sessionWins = 0; sessionTotal = 0; }
+  buildLifelineButtons();
   updateDailyLabel();
   updateSessionScore();
   startNewGame();
 }
 
 function updateSessionScore() {
-  if (currentMode === 'random' && sessionTotal > 0) {
+  if ((currentMode === 'random' || currentMode === 'football') && sessionTotal > 0) {
     sessionScore.textContent = `🎯 ${sessionWins}/${sessionTotal}`;
     sessionScore.classList.remove('hidden');
   } else {
@@ -505,7 +536,7 @@ function checkLoss() {
 function triggerWin() {
   state.gameOver = true;
   state.won      = true;
-  if (currentMode === 'random') { sessionWins++; sessionTotal++; updateSessionScore(); }
+  if (currentMode === 'random' || currentMode === 'football') { sessionWins++; sessionTotal++; updateSessionScore(); }
   disableKeyboard();
   document.querySelectorAll('.letter-char').forEach(el => {
     const char = el.dataset.char;
@@ -518,7 +549,7 @@ function triggerWin() {
 function triggerLoss() {
   state.gameOver = true;
   state.won      = false;
-  if (currentMode === 'random') { sessionTotal++; updateSessionScore(); }
+  if (currentMode === 'random' || currentMode === 'football') { sessionTotal++; updateSessionScore(); }
   disableKeyboard();
   document.querySelectorAll('.letter-char').forEach(el => {
     const char = el.dataset.char;
@@ -682,9 +713,12 @@ async function activateLifeline(name) {
   if (btn) { btn.classList.add('used'); btn.disabled = true; }
 
   switch (name) {
-    case 'categories':   await showCategoriesHint();  break;
-    case 'freeletter':   showFreeLetterHint();         break;
-    case 'firstsentence': showFirstSentenceHint();     break;
+    case 'categories':    await showCategoriesHint();   break;
+    case 'freeletter':    showFreeLetterHint();          break;
+    case 'firstsentence': showFirstSentenceHint();       break;
+    case 'clubs':         await showClubsHint();         break;
+    case 'position':      showPositionHint();            break;
+    case 'nationality':   showNationalityHint();         break;
   }
 }
 
@@ -746,7 +780,10 @@ function resetLifelineButtons() {
 }
 
 // ── Loading / Error ───────────────────────────────────────────
-function showLoading() { loadingOverlay.classList.remove('hidden'); }
+function showLoading(msg = 'Fetching a Wikipedia article…') {
+  loadingOverlay.querySelector('p').textContent = msg;
+  loadingOverlay.classList.remove('hidden');
+}
 function hideLoading() { loadingOverlay.classList.add('hidden'); }
 function showError(msg) { errorMsg.textContent = msg; errorBanner.classList.remove('hidden'); }
 function hideError()    { errorBanner.classList.add('hidden'); }
@@ -759,6 +796,137 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// ── Football Mode ─────────────────────────────────────────────
+
+async function fetchFootballPlayer(attempts = 0) {
+  if (attempts > 12) throw new Error('Could not find a suitable player after many attempts. Please retry.');
+
+  // Randomise starting letter for variety across the large category
+  const letters = 'ABCDEFGHIJKLMNOPRSTW';
+  const letter  = letters[Math.floor(Math.random() * letters.length)];
+  const url = `https://en.wikipedia.org/w/api.php?action=query&list=categorymembers&cmtitle=Category:Premier_League_players&cmlimit=50&cmstartsortkeyprefix=${letter}&cmsort=sortkey&format=json&origin=*`;
+
+  const resp = await fetchWithTimeout(url, {}, 8000);
+  if (!resp.ok) throw new Error(`Wikipedia API returned ${resp.status}`);
+  const data = await resp.json();
+
+  const members = (data.query?.categorymembers || []).filter(m => {
+    const t = m.title || '';
+    if (t.includes(':')) return false;
+    const words = t.trim().split(/\s+/);
+    return words.length >= 2 && words.length <= 5;
+  });
+
+  if (members.length === 0) return fetchFootballPlayer(attempts + 1);
+
+  const member = members[Math.floor(Math.random() * members.length)];
+  const title  = member.title;
+
+  // Fetch full summary for extract, thumbnail etc.
+  const summaryUrl  = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
+  const summaryResp = await fetchWithTimeout(summaryUrl, {}, 8000);
+  if (!summaryResp.ok) return fetchFootballPlayer(attempts + 1);
+  const sData = await summaryResp.json();
+
+  const desc    = (sData.description || '').toLowerCase();
+  const extract = (sData.extract || '');
+  if (desc.includes('disambiguation')) return fetchFootballPlayer(attempts + 1);
+  if (!extract.toLowerCase().includes('football') && !extract.toLowerCase().includes('soccer')) return fetchFootballPlayer(attempts + 1);
+  if (extract.length < 80) return fetchFootballPlayer(attempts + 1);
+
+  return {
+    title:       sData.title || title,
+    description: sData.description || '',
+    extract,
+    thumbnail:   sData.thumbnail ? sData.thumbnail.source : null,
+    pageUrl:     sData.content_urls ? sData.content_urls.desktop.page : `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`,
+  };
+}
+
+async function fetchPlayerClubs(title) {
+  const url  = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=categories&cllimit=100&format=json&origin=*`;
+  const resp = await fetchWithTimeout(url, {}, 8000);
+  if (!resp.ok) throw new Error('Categories API error');
+  const data  = await resp.json();
+  const pages = data.query?.pages || {};
+  const page  = Object.values(pages)[0];
+  const cats  = (page?.categories || []).map(c => c.title.replace(/^Category:/, ''));
+  const meaningful = getMeaningfulTitleWords();
+
+  return cats
+    .filter(cat => {
+      const lower = cat.toLowerCase();
+      if (!lower.endsWith(' players')) return false;
+      if (meaningful.some(w => lower.includes(w.toLowerCase()))) return false;
+      return true;
+    })
+    .map(cat => cat.replace(/\s+players$/i, ''))
+    .slice(0, 8);
+}
+
+async function showClubsHint() {
+  addHintCard('Clubs', '<em>Loading clubs…</em>', 'hint-clubs');
+  try {
+    const clubs = await fetchPlayerClubs(state.article.title);
+    const card  = document.querySelector('.hint-clubs');
+    if (!card) return;
+    card.querySelector('.hint-body').innerHTML = clubs.length === 0
+      ? '<em>No clubs found.</em>'
+      : `<ul>${clubs.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>`;
+  } catch {
+    const card = document.querySelector('.hint-clubs');
+    if (card) card.querySelector('.hint-body').innerHTML = '<em>Could not load clubs.</em>';
+  }
+}
+
+function showPositionHint() {
+  const extract = state.article.extract || '';
+  if (!extract) { addHintCard('Position', '<em>No position information available.</em>'); return; }
+
+  // "plays as a/an [position]"
+  const playMatch = extract.match(/plays?\s+as\s+(?:a|an)\s+([^,\.;\n]+)/i);
+  if (playMatch) {
+    addHintCard('Position', `Plays as: <strong>${escapeHtml(playMatch[1].trim())}</strong>`);
+    return;
+  }
+
+  // Fallback: scan for known position words
+  const positions = [
+    'central midfielder', 'defensive midfielder', 'attacking midfielder', 'midfielder',
+    'centre-back', 'center-back', 'right-back', 'left-back', 'defender',
+    'right winger', 'left winger', 'winger',
+    'centre-forward', 'center-forward', 'striker', 'forward',
+    'goalkeeper',
+  ];
+  const lower = extract.toLowerCase();
+  for (const pos of positions) {
+    if (lower.includes(pos)) {
+      addHintCard('Position', `Position: <strong>${escapeHtml(pos)}</strong>`);
+      return;
+    }
+  }
+
+  addHintCard('Position', '<em>Position not found in article.</em>');
+}
+
+function showNationalityHint() {
+  const extract = state.article.extract || '';
+  if (!extract) { addHintCard('Nationality', '<em>No nationality information available.</em>'); return; }
+
+  // "is an/a [Nationality] [professional] footballer / soccer player"
+  const match = extract.match(/is\s+(?:a|an)\s+([\w][\w\s\-]*?)\s+(?:professional\s+|association\s+)?(?:foot(?:baller|ball\s+player)|soccer\s+player)/i);
+  if (match) {
+    const nat = match[1].trim();
+    if (nat.length <= 40) {
+      const redacted = redactTitleWords(nat);
+      addHintCard('Nationality', `Nationality: <strong>${escapeHtml(redacted)}</strong>`);
+      return;
+    }
+  }
+
+  addHintCard('Nationality', '<em>Nationality not found in article.</em>');
 }
 
 // ── Boot ──────────────────────────────────────────────────────
