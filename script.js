@@ -59,6 +59,11 @@ const MODE_LIFELINES = {
     { id: 'region',    icon: '🗺️', label: 'Region',    title: 'Show the geographic region' },
     { id: 'country',   icon: '🏳️', label: 'Country',   title: 'Show which country this is the capital of' },
   ],
+  pe: [
+    { id: 'pe-founded',  icon: '📅', label: 'Founded',      title: 'Show the year the firm was founded' },
+    { id: 'pe-hq',       icon: '🏙️', label: 'Headquarters', title: 'Show where the firm is headquartered' },
+    { id: 'pe-strategy', icon: '📊', label: 'Strategy',     title: 'Show the investment strategy' },
+  ],
 };
 
 // Common words excluded from redaction (won't give the answer away)
@@ -206,6 +211,7 @@ function buildLifelineButtons() {
   grid.innerHTML = '';
   const set = currentMode === 'football' ? MODE_LIFELINES.football
             : currentMode === 'capitals'  ? MODE_LIFELINES.capitals
+            : currentMode === 'pe'        ? MODE_LIFELINES.pe
             :                               MODE_LIFELINES.wiki;
   set.forEach(({ id, icon, label, title }) => {
     const btn = document.createElement('button');
@@ -280,12 +286,14 @@ async function startNewGame() {
   showLoading(
     currentMode === 'football' ? 'Finding a Premier League player…' :
     currentMode === 'capitals' ? 'Loading a capital city…' :
+    currentMode === 'pe'       ? 'Loading a PE firm…' :
     'Fetching a Wikipedia article…'
   );
   try {
     const article = currentMode === 'daily'    ? await fetchDailyArticle()
                   : currentMode === 'football' ? await fetchFootballPlayer()
                   : currentMode === 'capitals' ? await fetchCapital()
+                  : currentMode === 'pe'       ? await fetchPEFirm()
                   :                              await fetchValidArticle();
     hideLoading();
     state.article = article;
@@ -310,7 +318,7 @@ function switchTab(mode) {
     btn.classList.toggle('active', active);
     btn.setAttribute('aria-selected', active);
   });
-  if (mode === 'random' || mode === 'football' || mode === 'capitals') { sessionWins = 0; sessionTotal = 0; }
+  if (mode === 'random' || mode === 'football' || mode === 'capitals' || mode === 'pe') { sessionWins = 0; sessionTotal = 0; }
   buildLifelineButtons();
   updateDailyLabel();
   updateSessionScore();
@@ -318,7 +326,7 @@ function switchTab(mode) {
 }
 
 function updateSessionScore() {
-  if ((currentMode === 'random' || currentMode === 'football' || currentMode === 'capitals') && sessionTotal > 0) {
+  if ((currentMode === 'random' || currentMode === 'football' || currentMode === 'capitals' || currentMode === 'pe') && sessionTotal > 0) {
     sessionScore.textContent = `🎯 ${sessionWins}/${sessionTotal}`;
     sessionScore.classList.remove('hidden');
   } else {
@@ -548,7 +556,7 @@ function checkLoss() {
 function triggerWin() {
   state.gameOver = true;
   state.won      = true;
-  if (currentMode === 'random' || currentMode === 'football' || currentMode === 'capitals') { sessionWins++; sessionTotal++; updateSessionScore(); }
+  if (currentMode === 'random' || currentMode === 'football' || currentMode === 'capitals' || currentMode === 'pe') { sessionWins++; sessionTotal++; updateSessionScore(); }
   disableKeyboard();
   document.querySelectorAll('.letter-char').forEach(el => {
     const char = el.dataset.char;
@@ -561,7 +569,7 @@ function triggerWin() {
 function triggerLoss() {
   state.gameOver = true;
   state.won      = false;
-  if (currentMode === 'random' || currentMode === 'football' || currentMode === 'capitals') { sessionTotal++; updateSessionScore(); }
+  if (currentMode === 'random' || currentMode === 'football' || currentMode === 'capitals' || currentMode === 'pe') { sessionTotal++; updateSessionScore(); }
   disableKeyboard();
   document.querySelectorAll('.letter-char').forEach(el => {
     const char = el.dataset.char;
@@ -734,6 +742,9 @@ async function activateLifeline(name) {
     case 'continent':     showContinentHint();           break;
     case 'region':        showRegionHint();              break;
     case 'country':       showCountryHint();             break;
+    case 'pe-founded':    showFoundedHint();             break;
+    case 'pe-hq':         showHQHint();                  break;
+    case 'pe-strategy':   showStrategyHint();            break;
   }
 }
 
@@ -1186,6 +1197,137 @@ function showCountryHint() {
   const val = state.article.country;
   if (!val) { addHintCard('Country', '<em>Not available.</em>'); return; }
   addHintCard('Country', `Capital of: <strong>${escapeHtml(val)}</strong>`);
+}
+
+// ── Private Equity Mode ───────────────────────────────────────
+
+const PE_FIRMS = [
+  // US Mega-cap Buyout
+  { name: 'Blackstone',              wikiTitle: 'Blackstone Inc.',                  founded: 1985, hq: 'New York, USA',          strategy: 'Buyout / Real Estate' },
+  { name: 'KKR',                     wikiTitle: 'KKR & Co.',                        founded: 1976, hq: 'New York, USA',          strategy: 'Buyout' },
+  { name: 'Apollo Global Management',wikiTitle: 'Apollo Global Management',         founded: 1990, hq: 'New York, USA',          strategy: 'Buyout / Credit' },
+  { name: 'Carlyle Group',           wikiTitle: 'The Carlyle Group',                founded: 1987, hq: 'Washington D.C., USA',   strategy: 'Buyout' },
+  { name: 'Bain Capital',            wikiTitle: 'Bain Capital',                     founded: 1984, hq: 'Boston, USA',            strategy: 'Buyout / Venture' },
+  { name: 'TPG',                     wikiTitle: 'TPG Inc.',                         founded: 1992, hq: 'Fort Worth, USA',        strategy: 'Buyout / Growth' },
+  { name: 'Warburg Pincus',          wikiTitle: 'Warburg Pincus',                   founded: 1966, hq: 'New York, USA',          strategy: 'Growth Equity' },
+  { name: 'Ares Management',         wikiTitle: 'Ares Management',                  founded: 1997, hq: 'Los Angeles, USA',       strategy: 'Credit / Buyout' },
+  { name: 'Silver Lake',             wikiTitle: 'Silver Lake (investment firm)',     founded: 1999, hq: 'Menlo Park, USA',        strategy: 'Technology Buyout' },
+  { name: 'Vista Equity Partners',   wikiTitle: 'Vista Equity Partners',            founded: 2000, hq: 'Austin, USA',            strategy: 'Technology Buyout' },
+  { name: 'Thoma Bravo',             wikiTitle: 'Thoma Bravo',                      founded: 1980, hq: 'Chicago, USA',           strategy: 'Technology Buyout' },
+  { name: 'Francisco Partners',      wikiTitle: 'Francisco Partners',               founded: 1999, hq: 'San Francisco, USA',     strategy: 'Technology Buyout' },
+  { name: 'General Atlantic',        wikiTitle: 'General Atlantic',                 founded: 1980, hq: 'New York, USA',          strategy: 'Growth Equity' },
+  { name: 'Hellman & Friedman',      wikiTitle: 'Hellman & Friedman',               founded: 1984, hq: 'San Francisco, USA',     strategy: 'Buyout' },
+  { name: 'Clayton Dubilier & Rice', wikiTitle: 'Clayton, Dubilier & Rice',         founded: 1978, hq: 'New York, USA',          strategy: 'Buyout' },
+  { name: 'Leonard Green & Partners',wikiTitle: 'Leonard Green & Partners',         founded: 1989, hq: 'Los Angeles, USA',       strategy: 'Buyout' },
+  { name: 'Insight Partners',        wikiTitle: 'Insight Partners',                 founded: 1995, hq: 'New York, USA',          strategy: 'Growth Equity / Venture' },
+  { name: 'Advent International',    wikiTitle: 'Advent International',             founded: 1984, hq: 'Boston, USA',            strategy: 'Buyout' },
+  { name: 'Providence Equity',       wikiTitle: 'Providence Equity',                founded: 1989, hq: 'Providence, USA',        strategy: 'Media & Technology Buyout' },
+  { name: 'Madison Dearborn Partners',wikiTitle: 'Madison Dearborn Partners',       founded: 1992, hq: 'Chicago, USA',           strategy: 'Buyout' },
+  { name: 'GTCR',                    wikiTitle: 'GTCR',                             founded: 1980, hq: 'Chicago, USA',           strategy: 'Buyout' },
+  { name: 'New Mountain Capital',    wikiTitle: 'New Mountain Capital',             founded: 1999, hq: 'New York, USA',          strategy: 'Buyout' },
+  { name: 'Veritas Capital',         wikiTitle: 'Veritas Capital',                  founded: 1992, hq: 'New York, USA',          strategy: 'Government Services Buyout' },
+  { name: 'Oak Hill Capital',        wikiTitle: 'Oak Hill Capital Partners',        founded: 1986, hq: 'New York, USA',          strategy: 'Buyout' },
+  { name: 'Berkshire Partners',      wikiTitle: 'Berkshire Partners',               founded: 1984, hq: 'Boston, USA',            strategy: 'Buyout' },
+  { name: 'Roark Capital',           wikiTitle: 'Roark Capital Group',              founded: 2001, hq: 'Atlanta, USA',           strategy: 'Consumer / Franchise Buyout' },
+  { name: 'Golden Gate Capital',     wikiTitle: 'Golden Gate Capital',              founded: 2000, hq: 'San Francisco, USA',     strategy: 'Buyout' },
+  { name: 'American Securities',     wikiTitle: 'American Securities',              founded: 1994, hq: 'New York, USA',          strategy: 'Buyout' },
+  { name: 'ABRY Partners',           wikiTitle: 'ABRY Partners',                    founded: 1989, hq: 'Boston, USA',            strategy: 'Media Buyout' },
+  { name: 'Genstar Capital',         wikiTitle: 'Genstar Capital',                  founded: 1988, hq: 'San Francisco, USA',     strategy: 'Buyout' },
+  // European Buyout
+  { name: 'CVC Capital Partners',    wikiTitle: 'CVC Capital Partners',             founded: 1981, hq: 'Luxembourg',             strategy: 'Buyout' },
+  { name: 'EQT',                     wikiTitle: 'EQT AB',                           founded: 1994, hq: 'Stockholm, Sweden',      strategy: 'Buyout / Infrastructure' },
+  { name: 'BC Partners',             wikiTitle: 'BC Partners',                      founded: 1986, hq: 'London, UK',             strategy: 'Buyout' },
+  { name: 'Apax Partners',           wikiTitle: 'Apax Partners',                    founded: 1969, hq: 'London, UK',             strategy: 'Buyout' },
+  { name: 'Permira',                 wikiTitle: 'Permira',                          founded: 1985, hq: 'London, UK',             strategy: 'Buyout' },
+  { name: 'Cinven',                  wikiTitle: 'Cinven',                           founded: 1977, hq: 'London, UK',             strategy: 'Buyout' },
+  { name: 'PAI Partners',            wikiTitle: 'PAI Partners',                     founded: 1998, hq: 'Paris, France',          strategy: 'Buyout' },
+  { name: 'Nordic Capital',          wikiTitle: 'Nordic Capital',                   founded: 1989, hq: 'Stockholm, Sweden',      strategy: 'Buyout' },
+  { name: 'HgCapital',               wikiTitle: 'HgCapital',                        founded: 2000, hq: 'London, UK',             strategy: 'Technology Buyout' },
+  { name: 'Bridgepoint',             wikiTitle: 'Bridgepoint (private equity)',      founded: 2000, hq: 'London, UK',             strategy: 'Buyout' },
+  { name: 'Ardian',                  wikiTitle: 'Ardian',                           founded: 1996, hq: 'Paris, France',          strategy: 'Buyout / Secondaries' },
+  { name: 'Partners Group',          wikiTitle: 'Partners Group',                   founded: 1996, hq: 'Baar, Switzerland',      strategy: 'Multi-Asset Private Markets' },
+  { name: '3i Group',                wikiTitle: '3i',                               founded: 1945, hq: 'London, UK',             strategy: 'Buyout / Infrastructure' },
+  { name: 'Investcorp',              wikiTitle: 'Investcorp',                       founded: 1982, hq: 'Manama, Bahrain',        strategy: 'Buyout / Real Estate' },
+  { name: 'Waterland',               wikiTitle: 'Waterland Private Equity',         founded: 1999, hq: 'Bussum, Netherlands',    strategy: 'Buyout' },
+  { name: 'Montagu',                 wikiTitle: 'Montagu Private Equity',           founded: 1968, hq: 'London, UK',             strategy: 'Buyout' },
+  { name: 'Inflexion',               wikiTitle: 'Inflexion Private Equity',         founded: 1999, hq: 'London, UK',             strategy: 'Buyout' },
+  { name: 'Intermediate Capital Group', wikiTitle: 'Intermediate Capital Group',    founded: 1989, hq: 'London, UK',             strategy: 'Credit / Mezzanine' },
+  { name: 'Bowmark Capital',         wikiTitle: 'Bowmark Capital',                  founded: 1997, hq: 'London, UK',             strategy: 'Buyout' },
+  // Infrastructure
+  { name: 'Brookfield Asset Management', wikiTitle: 'Brookfield Asset Management',  founded: 1899, hq: 'Toronto, Canada',        strategy: 'Infrastructure / Real Estate' },
+  { name: 'Stonepeak',               wikiTitle: 'Stonepeak',                        founded: 2011, hq: 'New York, USA',          strategy: 'Infrastructure' },
+  { name: 'Antin Infrastructure Partners', wikiTitle: 'Antin Infrastructure Partners', founded: 2007, hq: 'Paris, France',       strategy: 'Infrastructure' },
+  // Credit / Distressed
+  { name: 'Oaktree Capital Management', wikiTitle: 'Oaktree Capital Management',    founded: 1995, hq: 'Los Angeles, USA',       strategy: 'Credit / Distressed' },
+  { name: 'Cerberus Capital Management', wikiTitle: 'Cerberus Capital Management',  founded: 1992, hq: 'New York, USA',          strategy: 'Distressed / Buyout' },
+  { name: 'Angelo Gordon',           wikiTitle: 'Angelo Gordon',                    founded: 1988, hq: 'New York, USA',          strategy: 'Credit / Real Estate' },
+  // Secondaries / Fund of Funds
+  { name: 'Coller Capital',          wikiTitle: 'Coller Capital',                   founded: 1990, hq: 'London, UK',             strategy: 'Secondaries' },
+  { name: 'Lexington Partners',      wikiTitle: 'Lexington Partners',               founded: 1994, hq: 'New York, USA',          strategy: 'Secondaries' },
+  { name: 'Hamilton Lane',           wikiTitle: 'Hamilton Lane',                    founded: 1991, hq: 'Conshohocken, USA',      strategy: 'Fund of Funds / Secondaries' },
+  { name: 'StepStone Group',         wikiTitle: 'StepStone Group',                  founded: 2007, hq: 'New York, USA',          strategy: 'Fund of Funds / Secondaries' },
+  // Venture Capital / Growth
+  { name: 'Sequoia Capital',         wikiTitle: 'Sequoia Capital',                  founded: 1972, hq: 'Menlo Park, USA',        strategy: 'Venture Capital' },
+  { name: 'Andreessen Horowitz',     wikiTitle: 'Andreessen Horowitz',              founded: 2009, hq: 'Menlo Park, USA',        strategy: 'Venture Capital' },
+  { name: 'Accel',                   wikiTitle: 'Accel (venture capital firm)',      founded: 1983, hq: 'Palo Alto, USA',         strategy: 'Venture Capital' },
+  { name: 'Index Ventures',          wikiTitle: 'Index Ventures',                   founded: 1996, hq: 'Geneva, Switzerland',    strategy: 'Venture Capital' },
+  { name: 'Lightspeed Venture Partners', wikiTitle: 'Lightspeed Venture Partners',  founded: 2000, hq: 'Menlo Park, USA',        strategy: 'Venture Capital' },
+  { name: 'Bessemer Venture Partners', wikiTitle: 'Bessemer Venture Partners',      founded: 1911, hq: 'Menlo Park, USA',        strategy: 'Venture Capital' },
+  { name: 'Battery Ventures',        wikiTitle: 'Battery Ventures',                 founded: 1983, hq: 'Boston, USA',            strategy: 'Venture Capital' },
+  { name: 'Tiger Global Management', wikiTitle: 'Tiger Global Management',          founded: 2001, hq: 'New York, USA',          strategy: 'Growth Equity / Venture' },
+  { name: 'Coatue Management',       wikiTitle: 'Coatue Management',                founded: 1999, hq: 'New York, USA',          strategy: 'Technology Growth' },
+  { name: 'New Enterprise Associates', wikiTitle: 'New Enterprise Associates',      founded: 1977, hq: 'Chevy Chase, USA',       strategy: 'Venture Capital' },
+  // Asia-Pacific
+  { name: 'MBK Partners',            wikiTitle: 'MBK Partners',                     founded: 2005, hq: 'Seoul, South Korea',     strategy: 'Buyout' },
+  { name: 'Affinity Equity Partners',wikiTitle: 'Affinity Equity Partners',         founded: 2004, hq: 'Hong Kong',              strategy: 'Buyout' },
+];
+
+async function fetchPEFirm(attempts = 0) {
+  if (attempts > 10) throw new Error('Could not find a suitable PE firm after many attempts. Please retry.');
+
+  const firm = PE_FIRMS[Math.floor(Math.random() * PE_FIRMS.length)];
+  const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(firm.wikiTitle)}`;
+  const resp = await fetchWithTimeout(summaryUrl, {}, 8000);
+  if (!resp.ok) return fetchPEFirm(attempts + 1);
+  const data = await resp.json();
+
+  const desc = (data.description || '').toLowerCase();
+  if (desc.includes('disambiguation')) return fetchPEFirm(attempts + 1);
+  if ((data.extract || '').length < 50) return fetchPEFirm(attempts + 1);
+
+  return buildPEArticle(firm, data);
+}
+
+function buildPEArticle(firm, data) {
+  return {
+    title:       firm.name,
+    description: data.description || '',
+    extract:     data.extract     || '',
+    thumbnail:   data.thumbnail   ? data.thumbnail.source : null,
+    pageUrl:     data.content_urls ? data.content_urls.desktop.page
+                                   : `https://en.wikipedia.org/wiki/${encodeURIComponent(firm.wikiTitle)}`,
+    founded:     firm.founded,
+    hq:          firm.hq,
+    strategy:    firm.strategy,
+  };
+}
+
+function showFoundedHint() {
+  const val = state.article.founded;
+  if (!val) { addHintCard('Founded', '<em>Not available.</em>'); return; }
+  addHintCard('Founded', `Founded: <strong>${escapeHtml(String(val))}</strong>`);
+}
+
+function showHQHint() {
+  const val = state.article.hq;
+  if (!val) { addHintCard('Headquarters', '<em>Not available.</em>'); return; }
+  addHintCard('Headquarters', `Headquarters: <strong>${escapeHtml(val)}</strong>`);
+}
+
+function showStrategyHint() {
+  const val = state.article.strategy;
+  if (!val) { addHintCard('Strategy', '<em>Not available.</em>'); return; }
+  addHintCard('Strategy', `Investment strategy: <strong>${escapeHtml(val)}</strong>`);
 }
 
 // ── Boot ──────────────────────────────────────────────────────
